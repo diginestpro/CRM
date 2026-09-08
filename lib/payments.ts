@@ -180,7 +180,7 @@ export async function createPaymentSession(invoiceId: string, gateway: "stripe" 
       tracker: trackerToken,
       source: "hosted",
       order_id: invoiceId,
-      redirect_url: `${appUrl}/api/payments/webhook`,
+      redirect_url: `${appUrl}/api/payments/callback`,
       cancel_url: `${returnUrl || appUrl + "/pay/" + invoiceId}?canceled=true`,
     })
 
