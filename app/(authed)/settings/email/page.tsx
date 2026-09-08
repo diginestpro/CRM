@@ -30,17 +30,16 @@ export default function EmailSettingsPage() {
       try {
         const res = await fetch("/api/settings/email")
         const data = await res.json()
-        if (data.success) {
-          const s: any = {}
-          data.settings.forEach((item: any) => { s[item.key] = item.value })
+        if (data.success && data.settings) {
+          const s = data.settings
           setSmtp({
-            host: s.smtp_host || "",
-            port: s.smtp_port || "587",
-            username: s.smtp_username || "",
-            password: s.smtp_password || "",
-            from_email: s.smtp_from_email || "",
-            from_name: s.smtp_from_name || "",
-            encryption: s.smtp_encryption || "tls",
+            host: s.host || "",
+            port: String(s.port || "587"),
+            username: s.username || "",
+            password: s.password || "",
+            from_email: s.from_email || "",
+            from_name: s.from_name || "",
+            encryption: s.encryption || "tls",
           })
         }
       } catch (e) { console.error(e) }

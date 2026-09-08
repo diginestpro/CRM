@@ -1,42 +1,72 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { createClientServer } from "@/lib/supabase/server"
 
-// Get all SMTP settings
+async function resolveCompanyId(): Promise<string | null> {
+  const supabase = await createClientServer()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("company_id")
+    .eq("id", user.id)
+    .maybeSingle()
+  return profile?.company_id ?? null
+}
+
 export async function GET() {
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { persistSession: false } }
-    )
-    const { data, error } = await supabase.from("system_settings").select("*").like("key", "smtp_%")
+    const companyId = await resolveCompanyId()
+    if (!companyId) {
+      return NextResponse.json({ success: false, error: "Not authenticated" }, { status: 401 })
+    }
+    const supabase = await createClientServer()
+    const { data, error } = await supabase
+      .from("smtp_settings")
+      .select("*")
+      .eq("company_id", companyId)
+      .maybeSingle()
     if (error) throw error
-    return NextResponse.json({ success: true, settings: data || [] })
+    return NextResponse.json({ success: true, settings: data || {} })
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message }, { status: 500 })
   }
 }
 
-// Save SMTP settings
 export async function POST(request: Request) {
   try {
+    const companyId = await resolveCompanyId()
+    if (!companyId) {
+      return NextResponse.json({ success: false, error: "Not authenticated" }, { status: 401 })
+    }
     const body = await request.json()
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { persistSession: false } }
-    )
+    const supabase = await createClientServer()
 
-    const updates = Object.entries(body).map(([key, value]) => ({
-      key: "smtp_" + key,
-      value: String(value),
+    const row: any = {
+      company_id: companyId,
+      host: body.host || body.smtp_host,
+      port: parseInt(String(body.port || body.smtp_port || "587"), 10),
+      username: body.username || body.smtp_user || null,
+      password: body.password || body.smtp_password || null,
+      encryption: body.encryption || body.smtp_secure || "tls",
+      from_name: body.from_name || body.smtp_from_name || null,
+      from_email: body.from_email || body.smtp_from_email || null,
       updated_at: new Date().toISOString(),
-    }))
+    }
 
-    const { error } = await supabase.from("system_settings").upsert(updates, { onConflict: "key" })
+    if (!row.host || !row.from_email) {
+      return NextResponse.json(
+        { success: false, error: "SMTP host and from email are required" },
+        { status: 400 }
+      )
+    }
+
+    const { error } = await supabase
+      .from("smtp_settings")
+      .upsert(row, { onConflict: "company_id" })
     if (error) throw error
     return NextResponse.json({ success: true })
   } catch (e: any) {
+    console.error("[SMTP Save Error]", e)
     return NextResponse.json({ success: false, error: e.message }, { status: 500 })
   }
 }
