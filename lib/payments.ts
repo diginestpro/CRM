@@ -56,18 +56,31 @@ export async function createPaymentSession(invoiceId: string, gateway: "stripe" 
   const clientEmail = invoice.clients?.email
 
   // URL Priority: DB app_settings -> NEXT_PUBLIC_APP_URL -> Production domain fallback
-  let appUrl = "https://crm.diginest.pro"
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    appUrl = process.env.NEXT_PUBLIC_APP_URL
+  // IMPORTANT: NEXT_PUBLIC_APP_URL must be the real production domain.
+  // We reject localhost and *.vercel.app preview URLs to avoid callback drift.
+  const PRODUCTION_DOMAIN = "https://crm.diginest.pro"
+  let appUrl = PRODUCTION_DOMAIN
+
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL
+  if (envUrl && !envUrl.includes("localhost") && !envUrl.includes(".vercel.app")) {
+    appUrl = envUrl
   }
   try {
     const appSettingsGw = await getPaymentGateway("app_settings")
-    if (appSettingsGw?.config?.app_url && !String(appSettingsGw.config.app_url).includes("localhost")) {
-      appUrl = appSettingsGw.config.app_url
+    const dbUrl = appSettingsGw?.config?.app_url
+    if (dbUrl && !String(dbUrl).includes("localhost") && !String(dbUrl).includes(".vercel.app")) {
+      appUrl = dbUrl
     }
   } catch (e) {
     // fallback
   }
+
+  // Final safety net
+  if (!appUrl || appUrl.includes("localhost") || appUrl.includes(".vercel.app")) {
+    appUrl = PRODUCTION_DOMAIN
+  }
+
+  console.log("[Payments] Using appUrl:", appUrl)
 
   if (gateway === "stripe") {
     const stripe = await getStripeClient()
