@@ -55,29 +55,26 @@ export async function createPaymentSession(invoiceId: string, gateway: "stripe" 
   else if (rawCurrency === "\u20a8" || rawCurrency.toLowerCase() === "rs") currency = "PKR"
   const clientEmail = invoice.clients?.email
 
-  // URL Priority: DB app_settings -> NEXT_PUBLIC_APP_URL -> Production domain fallback
-  // IMPORTANT: NEXT_PUBLIC_APP_URL must be the real production domain.
-  // We reject localhost and *.vercel.app preview URLs to avoid callback drift.
-  const PRODUCTION_DOMAIN = "https://crm.diginest.pro"
-  let appUrl = PRODUCTION_DOMAIN
+  // URL Priority: DB app_settings -> NEXT_PUBLIC_APP_URL
+  // No hardcoded fallback - we fail loudly if neither is configured,
+  // so a missing env var surfaces as a clear error rather than a silent bug.
+  let appUrl = process.env.NEXT_PUBLIC_APP_URL || ""
 
-  const envUrl = process.env.NEXT_PUBLIC_APP_URL
-  if (envUrl && !envUrl.includes("localhost") && !envUrl.includes(".vercel.app")) {
-    appUrl = envUrl
-  }
   try {
     const appSettingsGw = await getPaymentGateway("app_settings")
     const dbUrl = appSettingsGw?.config?.app_url
-    if (dbUrl && !String(dbUrl).includes("localhost") && !String(dbUrl).includes(".vercel.app")) {
+    if (dbUrl) {
       appUrl = dbUrl
     }
   } catch (e) {
-    // fallback
+    // ignore - keep env var value
   }
 
-  // Final safety net
-  if (!appUrl || appUrl.includes("localhost") || appUrl.includes(".vercel.app")) {
-    appUrl = PRODUCTION_DOMAIN
+  if (!appUrl) {
+    throw new Error(
+      "App URL is not configured. Set NEXT_PUBLIC_APP_URL in Vercel environment variables, "
+      + "or configure app_url in Settings -> Payment Gateways."
+    )
   }
 
   console.log("[Payments] Using appUrl:", appUrl)
