@@ -83,14 +83,24 @@ async function markInvoicePaid(req: Request, body: string) {
 
   const finalAmount = amount ?? Number(txn?.amount ?? invoice.total_amount ?? 0)
 
-  const { error: payErr } = await supabase.from("invoice_payments").insert({
+  // Insert payment row. Unique partial index on (invoice_id, gateway) WHERE
+  // status=completed will reject duplicates at the DB level (Postgres 23505).
+  const { data: payment, error: payErr } = await supabase.from("invoice_payments").insert({
     invoice_id: orderId,
     amount: finalAmount,
     payment_date: new Date().toISOString().split("T")[0],
     payment_method: "SafePay",
     status: "Completed",
   })
-  if (payErr) return { error: payErr.message }
+    .select()
+    .single()
+
+  if (payErr) {
+    if (payErr.code === "23505") {
+      return { success: true, duplicate: true, invoice_id: orderId }
+    }
+    return { error: payErr.message }
+  }
 
   const { data: allPayments } = await supabase
     .from("invoice_payments")

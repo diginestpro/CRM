@@ -343,7 +343,8 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
 
   if (pErr) throw pErr
 
-  await supabase.from("payment_transactions").insert({
+  // Insert payment_transactions row. Unique partial index will reject duplicates.
+  const { error: txnErr } = await supabase.from("payment_transactions").insert({
     invoice_id: invoiceId,
     payment_id: payment.id,
     amount: amount,
@@ -351,6 +352,8 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
     status: "completed",
     raw_response: payload,
   })
+  // 23505 = unique violation (duplicate). Safe to ignore - the webhook fired twice.
+  if (txnErr && txnErr.code !== "23505") throw txnErr
 
   const { data: allPayments } = await supabase
     .from("invoice_payments")
