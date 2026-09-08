@@ -310,7 +310,24 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
 
   if (!invoiceId) throw new Error("Invoice ID not found in webhook payload")
 
+  // Idempotency: SafePay may fire the webhook (browser GET + server POST) twice.
+  // Skip if we already processed this invoice as completed.
+  const { data: existingTxn } = await supabase
+    .from("payment_transactions")
+    .select("id, status")
+    .eq("invoice_id", invoiceId)
+    .eq("gateway", "safepay")
+    .eq("status", "completed")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
   const { data: invoice } = await supabase.from("invoices").select("total_amount, currency_code").eq("id", invoiceId).single()
+
+  if (existingTxn) {
+    console.log("[Webhook][SafePay] already processed, skipping invoice", invoiceId)
+    return { success: true, duplicate: true, invoice_id: invoiceId }
+  }
 
   const { data: payment, error: pErr } = await supabase
     .from("invoice_payments")

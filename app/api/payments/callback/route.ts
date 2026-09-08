@@ -67,6 +67,20 @@ async function markInvoicePaid(req: Request, body: string) {
     .limit(1)
     .maybeSingle()
 
+  // Idempotency: skip if already completed for this invoice.
+  const { data: alreadyPaid } = await supabase
+    .from("payment_transactions")
+    .select("id")
+    .eq("invoice_id", orderId)
+    .eq("gateway", "safepay")
+    .eq("status", "completed")
+    .limit(1)
+    .maybeSingle()
+
+  if (alreadyPaid) {
+    return { success: true, duplicate: true, invoice_id: orderId }
+  }
+
   const finalAmount = amount ?? Number(txn?.amount ?? invoice.total_amount ?? 0)
 
   const { error: payErr } = await supabase.from("invoice_payments").insert({
