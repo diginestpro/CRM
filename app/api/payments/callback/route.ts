@@ -128,17 +128,38 @@ export async function GET(req: Request) {
   const dest = `/pay/${orderId}/receipt?` + params.toString()
   const fullUrl = new URL(dest, url.origin).toString()
 
-  // SafePay embedded iframe: return HTML to break out via top-level navigation.
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Payment</title>
-<style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f8fafc;color:#0f172a}
-.c{text-align:center;padding:24px;background:white;border-radius:16px;box-shadow:0 10px 25px rgba(15,23,42,.08);max-width:420px}
-h1{font-size:20px;margin:0 0 8px}p{color:#64748b;margin:8px 0 0;font-size:14px}a{color:#2563eb;text-decoration:none;font-weight:600}</style></head>
-<body><div class="c"><h1>${success ? "Payment successful" : "Payment failed"}</h1>
-<p>${success ? "Loading your receipt..." : "Returning to your invoice..."}</p>
-<p><a href="${fullUrl}">Continue</a></p></div>
-<script>try { window.top.location.replace(${JSON.stringify(fullUrl)}) } catch (e) {}
-setTimeout(function(){ window.location.replace(${JSON.stringify(fullUrl)}) }, 1500)</script>
-</body></html>`
+  // We are running inside SafePay's iframe at
+  // sandbox.api.getsafepay.com/embedded/external/<our-domain>/...
+  // Their CSP blocks window.top navigation. We must use postMessage to
+  // tell their parent to navigate, with manual fallbacks.
+  const safeUrl = JSON.stringify(fullUrl)
+  const html = `<!doctype html><html><head><meta charset="utf-8">
+<title>Payment ${success ? "successful" : "failed"}</title>
+<style>
+body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f8fafc;color:#0f172a}
+.c{text-align:center;padding:32px;background:white;border-radius:16px;box-shadow:0 10px 25px rgba(15,23,42,.08);max-width:440px}
+h1{font-size:22px;margin:0 0 8px}p{color:#64748b;margin:8px 0 0;font-size:14px;line-height:1.5}
+a.btn{display:inline-block;margin-top:16px;padding:12px 24px;background:#2563eb;color:white;border-radius:8px;text-decoration:none;font-weight:600}
+</style></head>
+<body><div class="c">
+<h1>${success ? "\u2705 Payment successful" : "\u274c Payment failed"}</h1>
+<p>${success ? "Your payment was received. Tap the button below to view your receipt." : "Tap the button below to return to the invoice."}</p>
+<a id="go" class="btn" href="${fullUrl}">${success ? "View Receipt" : "Back to Invoice"}</a>
+</div>
+<script>
+(function(){
+  var url = ${safeUrl};
+  // 1. Tell SafePay's parent iframe to navigate (their SDK listens for this)
+  try { window.parent.postMessage({type:"safepay:payment_complete", url:url, status:"${success ? "completed" : "failed"}"}, "*"); } catch(e) {}
+  try { window.parent.postMessage({event:"payment.success", url:url}, "*"); } catch(e) {}
+  // 2. Try window.top (might be blocked but harmless to try)
+  try { window.top.location.href = url; } catch(e) {}
+  // 3. Try window.location as a fallback
+  setTimeout(function(){ try { window.location.href = url; } catch(e) {} }, 500);
+  // 4. Auto-click the button after 2s if nothing else worked
+  setTimeout(function(){ var b=document.getElementById("go"); if(b) b.click(); }, 2000);
+})();
+</script></body></html>`
 
   return new NextResponse(html, {
     status: 200,
