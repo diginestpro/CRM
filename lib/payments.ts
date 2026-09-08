@@ -52,10 +52,14 @@ export async function createPaymentSession(invoiceId: string, gateway: "stripe" 
   else if (rawCurrency === "\u20a8" || rawCurrency.toLowerCase() === "rs") currency = "PKR"
   const clientEmail = invoice.clients?.email
 
-  let appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+  // URL Priority: DB app_settings -> NEXT_PUBLIC_APP_URL -> Production domain fallback
+  let appUrl = "https://crm.diginest.pro"
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    appUrl = process.env.NEXT_PUBLIC_APP_URL
+  }
   try {
     const appSettingsGw = await getPaymentGateway("app_settings")
-    if (appSettingsGw?.config?.app_url) {
+    if (appSettingsGw?.config?.app_url && !String(appSettingsGw.config.app_url).includes("localhost")) {
       appUrl = appSettingsGw.config.app_url
     }
   } catch (e) {
