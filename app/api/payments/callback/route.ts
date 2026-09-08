@@ -135,6 +135,7 @@ export async function GET(req: Request) {
   const safeUrl = JSON.stringify(fullUrl)
   const html = `<!doctype html><html><head><meta charset="utf-8">
 <title>Payment ${success ? "successful" : "failed"}</title>
+<meta http-equiv="refresh" content="0;url=${fullUrl}">
 <style>
 body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f8fafc;color:#0f172a}
 .c{text-align:center;padding:32px;background:white;border-radius:16px;box-shadow:0 10px 25px rgba(15,23,42,.08);max-width:440px}
