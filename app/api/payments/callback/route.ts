@@ -24,17 +24,25 @@ function getServiceClient() {
 
 async function markInvoicePaid(req: Request, body: string) {
   const url = new URL(req.url)
-  const orderId =
-    url.searchParams.get("order_id") ||
-    url.searchParams.get("invoice_id") ||
-    (() => {
-      try {
-        const p = JSON.parse(body || "{}")
-        return p?.order_id || p?.metadata?.order_id || p?.invoice_id
-      } catch (e) {
-        return null
-      }
-    })()
+
+  // SafePay sends order_id in different places depending on payload shape.
+  let orderId = url.searchParams.get("order_id") || url.searchParams.get("invoice_id") || ""
+  let amount: number | null = null
+  if (body) {
+    try {
+      const p = JSON.parse(body)
+      const inner = p.data || {}
+      orderId = orderId
+        || inner?.metadata?.order_id
+        || inner?.order_id
+        || p?.metadata?.order_id
+        || p?.order_id
+        || ""
+      const rawAmt = inner?.amount ?? p?.amount
+      if (typeof rawAmt === "number") amount = rawAmt / 100
+      else if (typeof rawAmt === "string") amount = parseFloat(rawAmt) / 100
+    } catch (e) { /* ignore */ }
+  }
 
   if (!orderId) {
     return { error: "order_id not found" }
@@ -59,11 +67,11 @@ async function markInvoicePaid(req: Request, body: string) {
     .limit(1)
     .maybeSingle()
 
-  const amount = txn?.amount ?? invoice.total_amount
+  const finalAmount = amount ?? Number(txn?.amount ?? invoice.total_amount ?? 0)
 
   const { error: payErr } = await supabase.from("invoice_payments").insert({
     invoice_id: orderId,
-    amount,
+    amount: finalAmount,
     payment_date: new Date().toISOString().split("T")[0],
     payment_method: "SafePay",
     status: "Completed",

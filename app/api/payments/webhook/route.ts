@@ -40,9 +40,13 @@ function detectGateway(req: Request, body: string): string {
   // Try to sniff the body
   try {
     const parsed = JSON.parse(body)
+    // SafePay: either { event: "payment.completed" } (old) or { type: "payment.succeeded" } (new)
     if (parsed?.event?.startsWith("payment.")) return "safepay"
+    if (parsed?.type?.startsWith("payment.")) return "safepay"
+    // SafePay also sends a "tracker" token at top level
+    if (parsed?.tracker && parsed?.data?.metadata?.order_id) return "safepay"
     if (parsed?.resource?.purchase_units) return "paypal"
-    if (parsed?.type && typeof parsed.type === "string") return "stripe"
+    if (parsed?.type && parsed?.data?.object) return "stripe"
   } catch (e) {
     // not JSON
   }

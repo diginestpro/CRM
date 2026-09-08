@@ -237,21 +237,47 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
     invoiceId = payload.resource?.purchase_units[0]?.custom_id
     amount = parseFloat(payload.resource?.purchase_units[0]?.amount?.value)
   } else if (gateway === "safepay") {
-    // SafePay redirects the customer back via GET with order_id in the query string.
-    // We may also receive POST webhooks from SafePay with a JSON body.
+    // SafePay can hit us in two ways:
+    //   1) GET redirect with ?order_id=&tracker= in URL
+    //   2) POST webhook with JSON body in either the OLD format
+    //      { event: "payment.completed", data: { amount, metadata: { order_id } } }
+    //      or the NEW format
+    //      { type: "payment.succeeded", data: { amount, metadata: { order_id }, tracker, ... } }
     let urlOrderId = ""
-    let urlTracker = ""
     if (requestUrl) {
       try {
         const u = new URL(requestUrl)
         urlOrderId = u.searchParams.get("order_id") || ""
-        urlTracker = u.searchParams.get("tracker") || ""
       } catch (e) {}
     }
-    invoiceId = urlOrderId || payload?.order_id || payload?.metadata?.order_id || ""
-    amount = payload?.amount
-    if (typeof amount !== "number") {
-      // Try to look up the amount from the pending payment transaction.
+
+    // payload may already be parsed by the route or still a string
+    const body = typeof payload === "string"
+      ? (() => { try { return JSON.parse(payload) } catch { return {} } })()
+      : (payload || {})
+
+    // SafePay sends data under .data, but also keep top-level fallback
+    const inner = body.data || {}
+
+    invoiceId = urlOrderId
+      || inner?.metadata?.order_id
+      || inner?.order_id
+      || body?.metadata?.order_id
+      || body?.order_id
+      || ""
+
+    // amount is in cents (smallest currency unit) in SafePay format
+    const rawAmount = inner?.amount ?? body?.amount
+    if (typeof rawAmount === "number") {
+      amount = rawAmount / 100
+    } else if (typeof rawAmount === "string") {
+      amount = parseFloat(rawAmount) / 100
+    } else {
+      amount = 0
+    }
+
+    // Fallback to pending payment_transaction amount if still 0
+    if (!amount && invoiceId) {
       try {
         const { data: txn } = await supabase
           .from("payment_transactions")
@@ -261,11 +287,13 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle()
-        amount = txn?.amount || 0
+        amount = Number(txn?.amount || 0)
       } catch (e) {
         amount = 0
       }
     }
+
+    console.log("[Webhook][SafePay] invoiceId:", invoiceId, "amount:", amount, "type:", body.type || body.event)
   } else {
     throw new Error("Unknown gateway")
   }
