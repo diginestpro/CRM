@@ -73,8 +73,10 @@ export async function POST(req: Request) {
   // Stripe and PayPal require a signature. SafePay uses order_id in the redirect,
   // so we accept those requests as long as they include order_id or tracker.
   if (gateway === "unknown") {
-    console.warn(`[Webhook] Rejected request from ${ip} - cannot identify gateway`)
-    return NextResponse.json({ error: "Cannot identify gateway" }, { status: 400 })
+    // Could be from another merchant's webhook misconfigured to our URL,
+    // or a test ping. Log and acknowledge so they don't retry forever.
+    console.warn(`[Webhook] Unknown payload from ${ip}, body preview: ${body.slice(0, 200)}`)
+    return NextResponse.json({ received: true, skipped: "unknown gateway" }, { status: 200 })
   }
 
   if (gateway !== "safepay" && !signature) {
