@@ -31,10 +31,19 @@ SELECT id FROM public.companies
 WHERE id NOT IN (SELECT company_id FROM public.app_settings)
 ON CONFLICT (company_id) DO NOTHING;
 
--- 4. Remove the hacky app_settings row from payment_gateways
+-- 4. Remove the hacky app_settings row from payment_gateways (idempotent)
 DELETE FROM public.payment_gateways WHERE gateway_name = 'app_settings';
 
--- 5. Enable RLS and add policies
+-- 5. Verify: make sure the payment_gateways row is gone
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.payment_gateways WHERE gateway_name = 'app_settings') THEN
+    RAISE EXCEPTION 'Migration failed: app_settings row still exists in payment_gateways';
+  END IF;
+  RAISE NOTICE 'Migration OK: app_settings row removed from payment_gateways';
+END $$;
+
+-- 6. Enable RLS and add policies
 ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view their company app settings" ON public.app_settings;
