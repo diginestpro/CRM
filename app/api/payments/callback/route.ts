@@ -72,8 +72,8 @@ async function markInvoicePaid(req: Request, body: string) {
     .from("payment_transactions")
     .select("id")
     .eq("invoice_id", orderId)
-    .eq("gateway", "safepay")
     .eq("status", "completed")
+    .not("gateway_transaction_id", "is", null)
     .limit(1)
     .maybeSingle()
 

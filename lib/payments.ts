@@ -207,12 +207,11 @@ export async function createPaymentSession(invoiceId: string, gateway: "stripe" 
 
     await supabase.from("payment_transactions").insert({
       invoice_id: invoiceId,
-      gateway: "safepay",
       amount: amount,
-      currency: currency,
+      currency_code: currency,
+      gateway_transaction_id: trackerToken,
       status: "pending",
       raw_response: sessionResponse,
-      metadata: { tracker: trackerToken, checkout_url: checkoutUrl, passport_token_preview: String(authToken).substring(0, 10) + "..." },
     })
 
     return { url: checkoutUrl }
@@ -316,8 +315,8 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
     .from("payment_transactions")
     .select("id, status")
     .eq("invoice_id", invoiceId)
-    .eq("gateway", "safepay")
     .eq("status", "completed")
+    .not("gateway_transaction_id", "is", null)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -347,6 +346,7 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
   const { error: txnErr } = await supabase.from("payment_transactions").insert({
     invoice_id: invoiceId,
     payment_id: payment.id,
+    gateway_transaction_id: invoiceId,
     amount: amount,
     currency_code: invoice?.currency_code || "USD",
     status: "completed",

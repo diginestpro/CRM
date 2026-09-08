@@ -14,15 +14,12 @@ WHERE gateway = 'safepay'
 GROUP BY invoice_id
 HAVING COUNT(*) > 1;
 
--- 2. Delete duplicate payment_transactions (keep the OLDEST)
--- Note: the original "pending" row + the first "completed" insert should remain;
--- delete any subsequent duplicates.
+-- 2. Delete duplicate payment_transactions (keep the OLDEST).
+-- We group by invoice_id and keep the row with the earliest created_at.
 DELETE FROM public.payment_transactions p1
 USING public.payment_transactions p2
 WHERE p1.invoice_id = p2.invoice_id
-  AND p1.gateway = p2.gateway
-  AND p1.created_at > p2.created_at
-  AND p1.gateway = 'safepay';
+  AND p1.created_at > p2.created_at;
 
 -- 3. Delete duplicate invoice_payments (keep the OLDEST)
 DELETE FROM public.invoice_payments p1
