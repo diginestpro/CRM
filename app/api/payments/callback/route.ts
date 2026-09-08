@@ -28,19 +28,28 @@ async function markInvoicePaid(req: Request, body: string) {
   // SafePay sends order_id in different places depending on payload shape.
   let orderId = url.searchParams.get("order_id") || url.searchParams.get("invoice_id") || ""
   let amount: number | null = null
+  let gateway = "SafePay"
+
   if (body) {
     try {
       const p = JSON.parse(body)
-      const inner = p.data || {}
-      orderId = orderId
-        || inner?.metadata?.order_id
-        || inner?.order_id
-        || p?.metadata?.order_id
-        || p?.order_id
-        || ""
-      const rawAmt = inner?.amount ?? p?.amount
-      if (typeof rawAmt === "number") amount = rawAmt / 100
-      else if (typeof rawAmt === "string") amount = parseFloat(rawAmt) / 100
+      if (p.resource?.purchase_units) {
+        gateway = "PayPal"
+        orderId = orderId || p.resource.purchase_units[0]?.custom_id || ""
+        const paypalAmt = p.resource.purchase_units[0]?.amount?.value
+        if (paypalAmt) amount = parseFloat(paypalAmt)
+      } else {
+        const inner = p.data || {}
+        orderId = orderId
+          || inner?.metadata?.order_id
+          || inner?.order_id
+          || p?.metadata?.order_id
+          || p?.order_id
+          || ""
+        const rawAmt = inner?.amount ?? p?.amount
+        if (typeof rawAmt === "number") amount = rawAmt / 100
+        else if (typeof rawAmt === "string") amount = parseFloat(rawAmt) / 100
+      }
     } catch (e) { /* ignore */ }
   }
 
@@ -89,7 +98,7 @@ async function markInvoicePaid(req: Request, body: string) {
     invoice_id: orderId,
     amount: finalAmount,
     payment_date: new Date().toISOString().split("T")[0],
-    payment_method: "SafePay",
+    payment_method: gateway,
     status: "Completed",
   })
     .select()
