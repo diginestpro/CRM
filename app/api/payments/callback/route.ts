@@ -150,15 +150,17 @@ a.btn{display:inline-block;margin-top:16px;padding:12px 24px;background:#2563eb;
 <script>
 (function(){
   var url = ${safeUrl};
-  // 1. Tell SafePay's parent iframe to navigate (their SDK listens for this)
-  try { window.parent.postMessage({type:"safepay:payment_complete", url:url, status:"${success ? "completed" : "failed"}"}, "*"); } catch(e) {}
-  try { window.parent.postMessage({event:"payment.success", url:url}, "*"); } catch(e) {}
-  // 2. Try window.top (might be blocked but harmless to try)
-  try { window.top.location.href = url; } catch(e) {}
-  // 3. Try window.location as a fallback
-  setTimeout(function(){ try { window.location.href = url; } catch(e) {} }, 500);
-  // 4. Auto-click the button after 2s if nothing else worked
-  setTimeout(function(){ var b=document.getElementById("go"); if(b) b.click(); }, 2000);
+  var inSafePayProxy = window.location.hostname.indexOf("getsafepay.com") >= 0;
+  if (inSafePayProxy) {
+    // SafePay is reverse-proxying our callback. Tell them we are done.
+    try { window.parent.postMessage({type:"safepay:payment_complete", url:url, status:"${success ? "completed" : "failed"}"}, "*"); } catch(e) {}
+    try { window.parent.postMessage({event:"payment.success", url:url}, "*"); } catch(e) {}
+    try { window.location.replace(url); } catch(e) {}
+  } else {
+    try { window.top.location.href = url; } catch(e) {}
+  }
+  setTimeout(function(){ try { window.location.replace(url); } catch(e) {} }, 800);
+  setTimeout(function(){ var b=document.getElementById("go"); if(b) b.click(); }, 2500);
 })();
 </script></body></html>`
 
