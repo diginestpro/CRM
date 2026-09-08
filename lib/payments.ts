@@ -363,7 +363,7 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
     .limit(1)
     .maybeSingle()
 
-  const { data: invoice } = await supabase.from("invoices").select("total_amount, currency_code").eq("id", invoiceId).single()
+  const { data: invoice } = await supabase.from("invoices").select("total_amount, currency_code, status").eq("id", invoiceId).single()
 
   if (existingTxn) {
     console.log("[Webhook][SafePay] already processed, skipping invoice", invoiceId)

@@ -43,7 +43,7 @@ export default function NewInvoicePage() {
   const [creatingClient, setCreatingClient] = useState(false)
 
   const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(schema) as any,
     defaultValues: {
       items: [{ service_id: "", quantity: 1, unit_price: 0 }],
       status: "Unpaid",
@@ -285,7 +285,7 @@ export default function NewInvoicePage() {
           </Card>
         </div>
 
-        <BillingItems register={register} control={control} setValue={setValue} watch={watch} services={services} errors={errors} />
+        <BillingItems control={control} setValue={setValue} watch={watch} services={services} />
 
         <Card className="mt-6">
           <CardHeader><CardTitle>Summary</CardTitle></CardHeader>

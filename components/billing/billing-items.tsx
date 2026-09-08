@@ -1,6 +1,6 @@
 "use client"
 
-import { useFieldArray, Control, UseFormSetValue, UseFormWatch } from 'react-hook-form'
+import { useFieldArray, Control, UseFormSetValue, UseFormWatch, FieldValues } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,27 +13,27 @@ interface Item {
   description?: string
 }
 
-interface QuotationItemsProps {
-  control: Control<any>
-  setValue: UseFormSetValue<any>
-  watch: UseFormWatch<any>
+interface BillingItemsProps<T extends FieldValues> {
+  control: Control<T>
+  setValue: UseFormSetValue<T>
+  watch: UseFormWatch<T>
   services: { id: string; name: string; base_price: number }[]
 }
 
-export function BillingItems({ control, setValue, watch, services }: QuotationItemsProps) {
-  const { fields, append, remove } = useFieldArray({ control, name: 'items' })
+export function BillingItems<T extends FieldValues>({ control, setValue, watch, services }: BillingItemsProps<T>) {
+  const { fields, append, remove } = useFieldArray({ control, name: 'items' as any })
   const values = watch()
 
   const handleServiceChange = (idx: number, id: string) => {
     const s = services.find(s => s.id === id)
-    if (s) setValue(`items.${idx}.unit_price`, s.base_price)
+    if (s) setValue(`items.${idx}.unit_price` as any, s.base_price as any)
   }
 
   return (
     <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
       <div className="p-4 border-b bg-slate-50 flex justify-between items-center">
         <h3 className="font-semibold">Line Items</h3>
-        <Button type="button" variant="outline" size="sm" onClick={() => append({ service_id: '', quantity: 1, unit_price: 0 })}>
+        <Button type="button" variant="outline" size="sm" onClick={() => append({ service_id: '', quantity: 1, unit_price: 0 } as any)}>
           <Plus className="h-4 w-4 mr-1" /> Add Item
         </Button>
       </div>
