@@ -35,7 +35,10 @@ async function getPayPalAccessToken() {
 }
 
 export async function createPaymentSession(invoiceId: string, gateway: "stripe" | "paypal" | "safepay", returnUrl?: string) {
-  const supabase = await createClientServer()
+  // Use admin client so the public /pay/[id] page works for guests
+  // (non-logged-in users paying their invoice via the emailed link).
+  const { createClientAdmin } = await import("@/lib/supabase/client")
+  const supabase = createClientAdmin()
   const { data: invoice, error } = await supabase
     .from("invoices")
     .select(`*, clients(*)`)
@@ -177,8 +180,8 @@ export async function createPaymentSession(invoiceId: string, gateway: "stripe" 
       tracker: trackerToken,
       source: "hosted",
       order_id: invoiceId,
-      redirect_url: `${appUrl}/api/payments/webhook/safepay`,
-      cancel_url: `${returnUrl || appUrl + "/invoices/" + invoiceId}?canceled=true`,
+      redirect_url: `${appUrl}/api/payments/webhook`,
+      cancel_url: `${returnUrl || appUrl + "/pay/" + invoiceId}?canceled=true`,
     })
 
     console.log("[SafePay] Checkout URL:", checkoutUrl)
@@ -199,8 +202,10 @@ export async function createPaymentSession(invoiceId: string, gateway: "stripe" 
   throw new Error("Unsupported gateway")
 }
 
-export async function handlePaymentWebhook(gateway: string, payload: any, signature: string) {
-  const supabase = await createClientServer()
+export async function handlePaymentWebhook(gateway: string, payload: any, signature: string, requestUrl?: string) {
+  // Use admin client so webhooks work without an authenticated session.
+  const { createClientAdmin } = await import("@/lib/supabase/client")
+  const supabase = createClientAdmin()
   let invoiceId: string
   let amount: number
 
@@ -223,8 +228,35 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
     invoiceId = payload.resource?.purchase_units[0]?.custom_id
     amount = parseFloat(payload.resource?.purchase_units[0]?.amount?.value)
   } else if (gateway === "safepay") {
-    invoiceId = payload.order_id || payload.metadata?.order_id
-    amount = payload.amount
+    // SafePay redirects the customer back via GET with order_id in the query string.
+    // We may also receive POST webhooks from SafePay with a JSON body.
+    let urlOrderId = ""
+    let urlTracker = ""
+    if (requestUrl) {
+      try {
+        const u = new URL(requestUrl)
+        urlOrderId = u.searchParams.get("order_id") || ""
+        urlTracker = u.searchParams.get("tracker") || ""
+      } catch (e) {}
+    }
+    invoiceId = urlOrderId || payload?.order_id || payload?.metadata?.order_id || ""
+    amount = payload?.amount
+    if (typeof amount !== "number") {
+      // Try to look up the amount from the pending payment transaction.
+      try {
+        const { data: txn } = await supabase
+          .from("payment_transactions")
+          .select("amount")
+          .eq("invoice_id", invoiceId)
+          .eq("status", "pending")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        amount = txn?.amount || 0
+      } catch (e) {
+        amount = 0
+      }
+    }
   } else {
     throw new Error("Unknown gateway")
   }
