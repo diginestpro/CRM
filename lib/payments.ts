@@ -55,16 +55,15 @@ export async function createPaymentSession(invoiceId: string, gateway: "stripe" 
   else if (rawCurrency === "\u20a8" || rawCurrency.toLowerCase() === "rs") currency = "PKR"
   const clientEmail = invoice.clients?.email
 
-  // URL Priority: DB app_settings -> NEXT_PUBLIC_APP_URL
-  // No hardcoded fallback - we fail loudly if neither is configured,
-  // so a missing env var surfaces as a clear error rather than a silent bug.
+  // URL Priority: app_settings table -> NEXT_PUBLIC_APP_URL
+  // No hardcoded fallback - we fail loudly if neither is configured.
   let appUrl = process.env.NEXT_PUBLIC_APP_URL || ""
 
   try {
-    const appSettingsGw = await getPaymentGateway("app_settings")
-    const dbUrl = appSettingsGw?.config?.app_url
-    if (dbUrl) {
-      appUrl = dbUrl
+    const { getAppSettings } = await import("@/lib/payment-gateways")
+    const appSettings = await getAppSettings()
+    if (appSettings?.app_url) {
+      appUrl = appSettings.app_url
     }
   } catch (e) {
     // ignore - keep env var value

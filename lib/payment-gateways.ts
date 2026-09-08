@@ -64,3 +64,34 @@ export async function isGatewayActive(name: string): Promise<boolean> {
   const gw = await getPaymentGateway(name)
   return gw?.is_active ?? false
 }
+
+export interface AppSettings {
+  id: string
+  company_id: string
+  app_url: string | null
+  default_currency_code: string | null
+  default_timezone: string | null
+}
+
+/**
+ * Get app-wide settings for a company (or first available if companyId not given).
+ * Uses the admin client to bypass RLS for server-side operations.
+ */
+export async function getAppSettings(companyId?: string): Promise<AppSettings | null> {
+  try {
+    const supabase = createClientAdmin()
+    let query = supabase.from('app_settings').select('*')
+    if (companyId) {
+      query = query.eq('company_id', companyId)
+    }
+    const { data, error } = await query.maybeSingle()
+    if (error) {
+      console.error('[getAppSettings] Error:', error)
+      return null
+    }
+    return data as AppSettings | null
+  } catch (e) {
+    console.error('[getAppSettings] Exception:', e)
+    return null
+  }
+}
