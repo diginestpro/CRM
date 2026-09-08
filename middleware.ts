@@ -58,6 +58,14 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
+  const pathname = request.nextUrl.pathname
+
+  // Never redirect API routes or the public /pay/* page.
+  // Webhooks from payment gateways must run without auth checks.
+  if (pathname.startsWith('/api/') || pathname.startsWith('/pay/')) {
+    return response
+  }
+
   // Protected routes
   const isProtectedRoute = request.nextUrl.pathname.startsWith('/dashboard') ||
                            request.nextUrl.pathname.startsWith('/clients') ||
@@ -86,6 +94,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/|favicon\\.ico|api/|pay/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js)$).*)',
   ],
 }
