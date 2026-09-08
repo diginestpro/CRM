@@ -191,13 +191,18 @@ export async function POST(req: Request) {
     }
 
     if ("next_public_app_url" in body) {
-      updates.push({
-        gateway_name: "app_settings",
-        patch: {
-          is_active: true,
-          config: { app_url: body.next_public_app_url || "" },
-        },
-      })
+      const incoming = String(body.next_public_app_url || "").trim()
+      // Only update app_url if the user actually provided a non-empty value.
+      // Empty input from a save of OTHER fields would wipe the configured URL.
+      if (incoming) {
+        updates.push({
+          gateway_name: "app_settings",
+          patch: {
+            is_active: true,
+            config: { app_url: incoming },
+          },
+        })
+      }
     }
 
     for (const { gateway_name, patch } of updates) {
