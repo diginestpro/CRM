@@ -119,53 +119,34 @@ export async function GET(req: Request) {
   const success = !result.error
   const params = new URLSearchParams()
   if (success) {
-    params.set("status", "success")
+    params.set("paid", "true")
   } else {
-    params.set("status", "error")
-    params.set("error", String(result.error || ""))
+    params.set("error", String(result.error || "unknown"))
   }
   if (tracker) params.set("tracker", tracker)
-  const dest = `/pay/${orderId}/receipt?` + params.toString()
+  const dest = `/pay/${orderId}?` + params.toString()
   const fullUrl = new URL(dest, url.origin).toString()
-
-  // We are running inside SafePay's iframe at
-  // sandbox.api.getsafepay.com/embedded/external/<our-domain>/...
-  // Their CSP blocks window.top navigation. We must use postMessage to
-  // tell their parent to navigate, with manual fallbacks.
   const safeUrl = JSON.stringify(fullUrl)
+
+  // Simple HTML: meta refresh + manual button. Returns to the invoice page.
   const html = `<!doctype html><html><head><meta charset="utf-8">
 <title>Payment ${success ? "successful" : "failed"}</title>
 <meta http-equiv="refresh" content="0;url=${fullUrl}">
 <style>
 body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f8fafc;color:#0f172a}
 .c{text-align:center;padding:32px;background:white;border-radius:16px;box-shadow:0 10px 25px rgba(15,23,42,.08);max-width:440px}
-h1{font-size:22px;margin:0 0 8px}p{color:#64748b;margin:8px 0 0;font-size:14px;line-height:1.5}
+h1{font-size:22px;margin:0 0 8px}p{color:#64748b;margin:8px 0 0;font-size:14px}
 a.btn{display:inline-block;margin-top:16px;padding:12px 24px;background:#2563eb;color:white;border-radius:8px;text-decoration:none;font-weight:600}
 </style></head>
 <body><div class="c">
 <h1>${success ? "\u2705 Payment successful" : "\u274c Payment failed"}</h1>
-<p>${success ? "Your payment was received. Tap the button below to view your receipt." : "Tap the button below to return to the invoice."}</p>
-<a id="go" class="btn" href="${fullUrl}">${success ? "View Receipt" : "Back to Invoice"}</a>
-</div>
-<script>
-(function(){
-  var url = ${safeUrl};
-  var inSafePayProxy = window.location.hostname.indexOf("getsafepay.com") >= 0;
-  if (inSafePayProxy) {
-    // SafePay is reverse-proxying our callback. Tell them we are done.
-    try { window.parent.postMessage({type:"safepay:payment_complete", url:url, status:"${success ? "completed" : "failed"}"}, "*"); } catch(e) {}
-    try { window.parent.postMessage({event:"payment.success", url:url}, "*"); } catch(e) {}
-    try { window.location.replace(url); } catch(e) {}
-  } else {
-    try { window.top.location.href = url; } catch(e) {}
-  }
-  setTimeout(function(){ try { window.location.replace(url); } catch(e) {} }, 800);
-  setTimeout(function(){ var b=document.getElementById("go"); if(b) b.click(); }, 2500);
-})();
-</script></body></html>`
+<p>${success ? "Returning to your invoice..." : "Returning to your invoice..."}</p>
+<a class="btn" href="${fullUrl}">${success ? "View Invoice" : "Back to Invoice"}</a>
+</div></body></html>`
 
   return new NextResponse(html, {
     status: 200,
     headers: { "content-type": "text/html; charset=utf-8" },
   })
+
 }

@@ -46,11 +46,14 @@ function InvoiceContent({ params }: { params: Promise<{ id: string }> }) {
 
   useEffect(() => {
     // Check for payment result from URL params
-    if (searchParams.get("success") === "true") {
+    if (searchParams.get("success") === "true" || searchParams.get("paid") === "true") {
       setPaymentResult("success")
       setShowPayment(false)
     } else if (searchParams.get("canceled") === "true") {
       setPaymentResult("canceled")
+    } else if (searchParams.get("error")) {
+      setPaymentResult("canceled")
+      toast.error("Payment failed: " + (searchParams.get("error") || "unknown"))
     }
   }, [searchParams])
 
@@ -200,7 +203,7 @@ function InvoiceContent({ params }: { params: Promise<{ id: string }> }) {
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6 print:py-0 print:px-0">
         {/* Payment Result Banner */}
-        {paymentResult === "success" && fullyPaid && (
+        {paymentResult === "success" && (
           <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-300 rounded-2xl p-6 shadow-lg print:hidden">
             <div className="flex items-start gap-4">
               <div className="h-12 w-12 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 shadow-md">
@@ -210,7 +213,13 @@ function InvoiceContent({ params }: { params: Promise<{ id: string }> }) {
                 <h2 className="text-xl font-bold text-green-900">Payment Successful! 🎉</h2>
                 <p className="text-green-700 mt-1">Thank you! Your payment of <strong>{formatMoney(invoice.total_amount, currency)}</strong> has been received and your invoice is now paid in full.</p>
                 <p className="text-sm text-green-600 mt-2">A receipt has been sent to your email. You can safely close this page or print a copy for your records.</p>
-                <div className="mt-3 flex gap-2">
+                <div className="mt-4 flex gap-2 flex-wrap">
+                  <a
+                    href={"/pay/" + invoiceId + "/receipt?status=success&tracker=" + (searchParams.get("tracker") || "")}
+                    className="inline-flex items-center justify-center rounded-md border border-slate-300 bg-white px-3 h-8 text-sm font-medium hover:bg-slate-50"
+                  >
+                    <Receipt className="h-4 w-4 mr-1" /> View Receipt
+                  </a>
                   <Button size="sm" variant="outline" onClick={handlePrint} className="bg-white">
                     <Printer className="h-4 w-4 mr-1" /> Print Receipt
                   </Button>
