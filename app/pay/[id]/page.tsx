@@ -43,6 +43,26 @@ function InvoiceContent({ params }: { params: Promise<{ id: string }> }) {
   const [allowedMethods, setAllowedMethods] = useState<string[]>([])
   const [paymentResult, setPaymentResult] = useState<"success" | "canceled" | null>(null)
   const [invoiceId, setInvoiceId] = useState<string>("")
+  const [currentStatus, setCurrentStatus] = useState<string>("")
+
+  // Live status polling - checks every 5s if status changed
+  useEffect(() => {
+    if (!invoiceId) return
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/invoices/${invoiceId}/status`)
+        const data = await res.json()
+        if (data?.status && data.status !== currentStatus) {
+          setCurrentStatus(data.status)
+          // If status changed to Paid while page is open, refresh
+          if (data.status === "Paid") {
+            window.location.reload()
+          }
+        }
+      } catch (e) { /* ignore */ }
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [invoiceId, currentStatus])
 
   useEffect(() => {
     // Check for payment result from URL params
@@ -78,6 +98,7 @@ function InvoiceContent({ params }: { params: Promise<{ id: string }> }) {
         if (data.allowed_methods?.length > 0) setSelectedGateway(data.allowed_methods[0])
         // Update paid status based on actual invoice data
         const fullyPaid = (inv.amount_paid || 0) >= (inv.total_amount || 0)
+        setCurrentStatus(inv.status || "")
         if (inv.status === "Paid" || fullyPaid) {
           setIsPaid(true)
           setPaymentResult("success")
@@ -437,10 +458,23 @@ function InvoiceContent({ params }: { params: Promise<{ id: string }> }) {
           </div>
         ) : (
           <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 sm:p-8 print:hidden">
-            {!showPayment ? (
+            {invoice.status === "Paid" ? (
+              <div className="text-center space-y-3 py-6">
+                <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
+                <h3 className="text-2xl font-bold text-green-700">Paid in Full</h3>
+                <p className="text-sm text-slate-500">Thank you. This invoice has been fully paid.</p>
+                <a href={"/pay/" + invoiceId + "/receipt"} className="inline-block mt-2 text-sm text-blue-600 hover:underline">View Receipt</a>
+              </div>
+            ) : invoice.status === "Cancelled" ? (
+              <div className="text-center space-y-3 py-6">
+                <XCircle className="h-16 w-16 text-slate-400 mx-auto" />
+                <h3 className="text-2xl font-bold text-slate-700">Invoice Cancelled</h3>
+                <p className="text-sm text-slate-500">This invoice has been cancelled and cannot be paid.</p>
+              </div>
+            ) : !showPayment ? (
               <div className="text-center space-y-4">
                 <div>
-                  <p className="text-sm text-slate-500 mb-1">Amount Due</p>
+                  <p className="text-sm text-slate-500 mb-1">{invoice.status === "Partial" ? "Remaining Balance" : "Amount Due"}</p>
                   <p className="text-4xl font-bold text-slate-900">{formatMoney(remaining, currency)}</p>
                 </div>
                 <Button onClick={() => setShowPayment(true)} size="lg" className="w-full sm:w-auto text-base px-8 py-6 text-white" style={{ backgroundColor: brandColor }}>
@@ -462,8 +496,9 @@ function InvoiceContent({ params }: { params: Promise<{ id: string }> }) {
                   </button>
                 </div>
                 <div>
-                  <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Amount</Label>
-                  <Input type="number" step="0.01" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} className="mt-1.5 text-lg font-medium" />
+                  <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{invoice.status === "Partial" ? `Pay Amount (max ${formatMoney(remaining, currency)})` : "Amount"}</Label>
+                  <Input type="number" step="0.01" max={remaining} value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} className="mt-1.5 text-lg font-medium" />
+                  {invoice.status === "Partial" && <p className="text-xs text-slate-500 mt-1">Pay any amount up to the remaining balance</p>}
                 </div>
                 <div>
                   <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Payment Method</Label>

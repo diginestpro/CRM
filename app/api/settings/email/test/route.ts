@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import nodemailer from "nodemailer"
 import { createClientServer } from "@/lib/supabase/server"
+import { createClientAdmin } from "@/lib/supabase/client"
 
 async function loadSmtp(companyId: string) {
   const supabase = await createClientServer()
@@ -32,7 +33,6 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}))
-    // Either use provided settings or load saved ones
     let cfg: any = body
     if (!cfg || !cfg.host) {
       cfg = await loadSmtp(companyId)
@@ -40,7 +40,7 @@ export async function POST(req: Request) {
 
     if (!cfg?.host || !cfg?.from_email) {
       return NextResponse.json(
-        { success: false, error: "SMTP host and from email are required. Save your SMTP settings first or pass them in the request body." },
+        { success: false, error: "SMTP host and from email are required. Please save your settings first." },
         { status: 400 }
       )
     }
@@ -54,32 +54,50 @@ export async function POST(req: Request) {
       port,
       secure,
       auth: cfg.username ? { user: cfg.username, pass: cfg.password } : undefined,
-      tls: encryption === "tls" ? { rejectUnauthorized: false } : undefined,
-      connectionTimeout: 10000,
+      tls: {
+        rejectUnauthorized: false, // Essential for many SMTP servers with self-signed certs
+      },
+      connectionTimeout: 5000, // 5 seconds
     })
 
-    await transporter.verify()
+    try {
+      // Attempt to verify connection
+      await transporter.verify()
+    } catch (verifyError: any) {
+      console.warn("[SMTP Verify Warn]", verifyError.message)
+      // We don't fail yet, because some servers fail verify but succeed in sendMail
+    }
 
     const toEmail = body?.to_email || cfg.from_email
-    await transporter.sendMail({
-      from: `"${cfg.from_name || "NexusCRM"}" <${cfg.from_email}>`,
-      to: toEmail,
-      subject: "NexusCRM - Test Email",
-      text: "This is a test email from your NexusCRM SMTP configuration.",
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h2 style="color: #2563eb;">Test Email Successful!</h2>
-          <p>This is a test email from your <strong>NexusCRM</strong> SMTP configuration.</p>
-          <p>If you received this, your email settings are working correctly!</p>
-          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-          <p style="color: #64748b; font-size: 12px;">SMTP Server: ${cfg.host}:${port}</p>
-        </div>
-      `,
-    })
+    try {
+      await transporter.sendMail({
+        from: `"${cfg.from_name || "NexusCRM"}" <${cfg.from_email}>`,
+        to: toEmail,
+        subject: "NexusCRM - Test Email",
+        text: "This is a test email from your NexusCRM SMTP configuration.",
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #2563eb;">Test Email Successful!</h2>
+            <p>This is a test email from your <strong>NexusCRM</strong> SMTP configuration.</p>
+            <p>If you received this, your email settings are working correctly!</p>
+            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+            <p style="color: #64748b; font-size: 12px;">SMTP Server: ${cfg.host}:${port}</p>
+          </div>
+        `,
+      })
+    } catch (sendError: any) {
+      console.error("[SMTP Send Error]", sendError)
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: `SMTP Send Error: ${sendError.message}. Please check your credentials and firewall settings.` 
+        },
+        { status: 500 }
+      )
+    }
 
-    // Log the email send
-    const supabase = await createClientServer()
-    await supabase.from("email_log").insert({
+    const adminSupabase = createClientAdmin()
+    await adminSupabase.from("email_log").insert({
       company_id: companyId,
       to_email: toEmail,
       from_email: cfg.from_email,
@@ -90,9 +108,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, message: "Test email sent successfully" })
   } catch (e: any) {
-    console.error("[Email Test Error]", e)
+    console.error("[Email Test Unexpected Error]", e)
     return NextResponse.json(
-      { success: false, error: e.message || "Failed to send test email" },
+      { success: false, error: e.message || "An unexpected error occurred while testing email." },
       { status: 500 }
     )
   }

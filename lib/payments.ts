@@ -1,8 +1,8 @@
 import Stripe from "stripe"
 import Safepay from "@sfpy/node-core"
-import { createClientServer } from "@/lib/supabase/server"
-import { getPaymentGateway } from "@/lib/payment-gateways"
-import { sendReceiptEmail } from "@/lib/email"
+import { createClientServer } from "./supabase/server"
+import { getPaymentGateway } from "./payment-gateways"
+import { sendReceiptEmail } from "./email"
 
 async function getStripeClient() {
   const gw = await getPaymentGateway("stripe")
@@ -63,7 +63,7 @@ export async function createPaymentSession(invoiceId: string, gateway: "stripe" 
   let appUrl = process.env.NEXT_PUBLIC_APP_URL || ""
 
   try {
-    const { getAppSettings } = await import("@/lib/payment-gateways")
+    const { getAppSettings } = await import("./payment-gateways")
     const appSettings = await getAppSettings()
     if (appSettings?.app_url) {
       appUrl = appSettings.app_url
