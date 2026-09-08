@@ -114,11 +114,34 @@ export async function GET(req: Request) {
   const result = await markInvoicePaid(req, "")
   const url = new URL(req.url)
   const orderId = url.searchParams.get("order_id") || ""
+  const tracker = url.searchParams.get("tracker") || ""
 
-  if (result.error) {
-    return NextResponse.redirect(
-      new URL(`/pay/${orderId}?error=` + encodeURIComponent(result.error), url.origin)
-    )
+  const success = !result.error
+  const params = new URLSearchParams()
+  if (success) {
+    params.set("status", "success")
+  } else {
+    params.set("status", "error")
+    params.set("error", String(result.error || ""))
   }
-  return NextResponse.redirect(new URL(`/pay/${orderId}?success=true`, url.origin))
+  if (tracker) params.set("tracker", tracker)
+  const dest = `/pay/${orderId}/receipt?` + params.toString()
+  const fullUrl = new URL(dest, url.origin).toString()
+
+  // SafePay embedded iframe: return HTML to break out via top-level navigation.
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Payment</title>
+<style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f8fafc;color:#0f172a}
+.c{text-align:center;padding:24px;background:white;border-radius:16px;box-shadow:0 10px 25px rgba(15,23,42,.08);max-width:420px}
+h1{font-size:20px;margin:0 0 8px}p{color:#64748b;margin:8px 0 0;font-size:14px}a{color:#2563eb;text-decoration:none;font-weight:600}</style></head>
+<body><div class="c"><h1>${success ? "Payment successful" : "Payment failed"}</h1>
+<p>${success ? "Loading your receipt..." : "Returning to your invoice..."}</p>
+<p><a href="${fullUrl}">Continue</a></p></div>
+<script>try { window.top.location.replace(${JSON.stringify(fullUrl)}) } catch (e) {}
+setTimeout(function(){ window.location.replace(${JSON.stringify(fullUrl)}) }, 1500)</script>
+</body></html>`
+
+  return new NextResponse(html, {
+    status: 200,
+    headers: { "content-type": "text/html; charset=utf-8" },
+  })
 }
