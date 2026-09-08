@@ -189,16 +189,19 @@ export async function createPaymentSession(invoiceId: string, gateway: "stripe" 
     }
     console.log("[SafePay] Got auth token")
 
-    // Step 3: Build the checkout URL manually.
-    // We do NOT use safepay.checkout.createCheckoutUrl() because the SDK
-    // hard-codes the URL to /embedded/ which forces SafePay to wrap our
-    // redirect in an iframe (sandbox.api.getsafepay.com/embedded/external/...).
-    // We build a URL that hits the actual hosted checkout page directly,
-    // which does a top-level browser redirect after payment.
-    const safeBaseUrl = isSandbox
-      ? "https://sandbox.getsafepay.com"
-      : "https://getsafepay.com"
-    const checkoutUrl = `${safeBaseUrl}/?env=${environment}&tbt=${encodeURIComponent(authToken)}&tracker=${encodeURIComponent(trackerToken)}&source=hosted&order_id=${encodeURIComponent(invoiceId)}&redirect_url=${encodeURIComponent(appUrl + "/api/payments/callback")}&cancel_url=${encodeURIComponent((returnUrl || appUrl + "/pay/" + invoiceId) + "?canceled=true")}`
+    // Step 3: Build the checkout URL using the SDK.
+    // The SDK points to https://sandbox.api.getsafepay.com/embedded/?...
+    // (or https://getsafepay.com/embedded/ in production). This is the
+    // canonical SafePay checkout page that handles payment + redirect.
+    const checkoutUrl = safepay.checkout.createCheckoutUrl({
+      env: environment,
+      tbt: authToken,
+      tracker: trackerToken,
+      source: "hosted",
+      order_id: invoiceId,
+      redirect_url: `${appUrl}/api/payments/callback`,
+      cancel_url: `${returnUrl || appUrl + "/pay/" + invoiceId}?canceled=true`,
+    })
 
     console.log("[SafePay] Checkout URL:", checkoutUrl)
 
