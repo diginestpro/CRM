@@ -2,6 +2,7 @@ import Stripe from "stripe"
 import Safepay from "@sfpy/node-core"
 import { createClientServer } from "@/lib/supabase/server"
 import { getPaymentGateway } from "@/lib/payment-gateways"
+import { sendReceiptEmail } from "@/lib/email"
 
 async function getStripeClient() {
   const gw = await getPaymentGateway("stripe")
@@ -20,7 +21,9 @@ async function getPayPalAccessToken() {
   if (!clientId || !clientSecret) throw new Error("PayPal Client ID or Secret is not configured.")
 
   const auth = Buffer.from(`${clientId}:${clientSecret}`).toString("base64")
-  const response = await fetch("https://api-m.sandbox.paypal.com/v1/oauth2/token", {
+  const mode = gw.config?.mode || "sandbox"
+  const baseUrl = mode === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com"
+  const response = await fetch(`${baseUrl}/v1/oauth2/token`, {
     method: "POST",
     headers: {
       Authorization: `Basic ${auth}`,
@@ -243,8 +246,47 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
       amount = session.amount_total ? session.amount_total / 100 : 0
     } else return { success: false }
   } else if (gateway === "paypal") {
-    invoiceId = payload.resource?.purchase_units[0]?.custom_id
-    amount = parseFloat(payload.resource?.purchase_units[0]?.amount?.value)
+    const gw = await getPaymentGateway("paypal")
+    if (!gw) throw new Error("PayPal is not active.")
+    
+    const webhookId = gw.webhook_secret // Store PayPal Webhook ID in the webhook_secret column
+    if (!webhookId) throw new Error("PayPal Webhook ID not configured. Please add it in Settings -> Payment Gateways.")
+
+    const mode = gw.config?.mode || "sandbox"
+    const baseUrl = mode === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com"
+
+    const payloadParsed = typeof payload === "string" ? JSON.parse(payload) : payload
+    
+    const verificationPayload = {
+      transmission_id: payloadParsed.id,
+      transmission_time: payloadParsed.create_time,
+      webhook_id: webhookId,
+      webhook_event: payloadParsed.event_type,
+    }
+
+    const token = await getPayPalAccessToken()
+    const verifyRes = await fetch(`${baseUrl}/v1/notifications/verify-webhook-signature`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(verificationPayload),
+    })
+
+    if (!verifyRes.ok) {
+      const errData = await verifyRes.json().catch(() => ({}))
+      throw new Error(`PayPal verification failed: ${errData.message || verifyRes.statusText}`)
+    }
+
+    const verifyData = await verifyRes.json()
+    if (verifyData.verification_status !== "SUCCESS") {
+      throw new Error(`PayPal verification status: ${verifyData.verification_status}`)
+    }
+
+    invoiceId = payloadParsed.resource?.purchase_units[0]?.custom_id
+    amount = parseFloat(payloadParsed.resource?.purchase_units[0]?.amount?.value)
+
   } else if (gateway === "safepay") {
     // SafePay can hit us in two ways:
     //   1) GET redirect with ?order_id=&tracker= in URL
@@ -362,8 +404,21 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
 
   const totalPaid = allPayments?.reduce((sum, p) => sum + p.amount, 0) || 0
 
-  const status = totalPaid >= (invoice?.total_amount || 0) ? "Paid" : "Unpaid"
-  await supabase.from("invoices").update({ status, amount_paid: totalPaid }).eq("id", invoiceId)
+  const newStatus = totalPaid >= (invoice?.total_amount || 0) ? "Paid" : (totalPaid > 0 ? "Partial" : "Unpaid")
+  const statusChangedToPaid = newStatus === "Paid" && invoice?.status !== "Paid"
+  await supabase.from("invoices").update({ status: newStatus, amount_paid: totalPaid }).eq("id", invoiceId)
+
+  // Send receipt email when invoice becomes fully paid
+  if (statusChangedToPaid && invoiceId) {
+    try {
+      const { data: invRow } = await supabase.from("invoices").select("company_id").eq("id", invoiceId).maybeSingle()
+      if (invRow?.company_id) {
+        await sendReceiptEmail(invRow.company_id, invoiceId)
+      }
+    } catch (e) {
+      console.error("[Webhook] receipt email failed:", e)
+    }
+  }
 
   return { success: true }
 }
