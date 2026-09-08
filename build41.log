@@ -1,0 +1,61 @@
+
+> crm-app@0.1.0 build
+> next build
+
+Γû▓ Next.js 16.3.4 (Turbopack)
+- Environments: .env.local
+Γ£ô Running next.config.ts took 59ms
+
+ΓÜá The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 4.6s
+  Running TypeScript ...
+app/dashboard/page.tsx(31,21): error TS7031: Binding element 'title' implicitly has an 'any' type.
+app/dashboard/page.tsx(31,28): error TS7031: Binding element 'value' implicitly has an 'any' type.
+app/dashboard/page.tsx(31,41): error TS7031: Binding element 'Icon' implicitly has an 'any' type.
+app/dashboard/page.tsx(31,47): error TS7031: Binding element 'description' implicitly has an 'any' type.
+app/invoices/[id]/page.tsx(35,35): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+app/payments/page.tsx(19,21): error TS2345: Argument of type 'any[]' is not assignable to parameter of type 'SetStateAction<never[]>'.
+  Type 'any[]' is not assignable to type 'never[]'.
+    Type 'any' is not assignable to type 'never'.
+app/payments/page.tsx(26,63): error TS2339: Property 'status' does not exist on type 'never'.
+app/payments/page.tsx(26,151): error TS2339: Property 'status' does not exist on type 'never'.
+app/payments/page.tsx(27,48): error TS2339: Property 'status' does not exist on type 'never'.
+app/payments/page.tsx(27,96): error TS2339: Property 'amount' does not exist on type 'never'.
+app/payments/page.tsx(28,47): error TS2339: Property 'status' does not exist on type 'never'.
+app/payments/page.tsx(28,93): error TS2339: Property 'amount' does not exist on type 'never'.
+app/payments/page.tsx(48,32): error TS2339: Property 'id' does not exist on type 'never'.
+app/payments/page.tsx(49,40): error TS2339: Property 'payment_date' does not exist on type 'never'.
+app/payments/page.tsx(50,55): error TS2339: Property 'invoices' does not exist on type 'never'.
+app/payments/page.tsx(51,31): error TS2339: Property 'invoices' does not exist on type 'never'.
+app/payments/page.tsx(52,31): error TS2339: Property 'payment_method' does not exist on type 'never'.
+app/payments/page.tsx(53,68): error TS2339: Property 'amount' does not exist on type 'never'.
+app/payments/page.tsx(54,98): error TS2339: Property 'status' does not exist on type 'never'.
+app/payments/page.tsx(54,192): error TS2339: Property 'status' does not exist on type 'never'.
+app/quotations/[id]/page.tsx(35,35): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+app/services/[id]/edit/page.tsx(32,5): error TS2322: Type 'Resolver<{ name: string; base_price: unknown; unit_type: string; is_active: boolean; description?: string | undefined; }, any, { name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }>' is not assignable to type 'Resolver<{ name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }, any, { name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }>'.
+  Types of parameters 'options' and 'options' are incompatible.
+    Type 'ResolverOptions<{ name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }>' is not assignable to type 'ResolverOptions<{ name: string; base_price: unknown; unit_type: string; is_active: boolean; description?: string | undefined; }>'.
+      Type 'unknown' is not assignable to type 'number'.
+app/services/[id]/edit/page.tsx(73,38): error TS2345: Argument of type '(values: { name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }) => Promise<void>' is not assignable to parameter of type 'SubmitHandler<TFieldValues, Promise<void>>'.
+  Types of parameters 'values' and 'data' are incompatible.
+    Type 'TFieldValues' is not assignable to type '{ name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }'.
+      Type 'FieldValues' is missing the following properties from type '{ name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }': name, base_price, unit_type, is_active
+app/services/new/page.tsx(30,5): error TS2322: Type 'Resolver<{ name: string; base_price: unknown; unit_type: string; is_active: boolean; description?: string | undefined; }, any, { name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }>' is not assignable to type 'Resolver<{ name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }, any, { name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }>'.
+  Types of parameters 'options' and 'options' are incompatible.
+    Type 'ResolverOptions<{ name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }>' is not assignable to type 'ResolverOptions<{ name: string; base_price: unknown; unit_type: string; is_active: boolean; description?: string | undefined; }>'.
+      Type 'unknown' is not assignable to type 'number'.
+app/services/new/page.tsx(60,38): error TS2345: Argument of type '(values: { name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }) => Promise<void>' is not assignable to parameter of type 'SubmitHandler<TFieldValues, Promise<void>>'.
+  Types of parameters 'values' and 'data' are incompatible.
+    Type 'TFieldValues' is not assignable to type '{ name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }'.
+      Type 'FieldValues' is missing the following properties from type '{ name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }': name, base_price, unit_type, is_active
+app/services/page.tsx(10,14): error TS7019: Rest parameter 'classes' implicitly has an 'any[]' type.
+Failed to type check.
+

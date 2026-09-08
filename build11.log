@@ -1,0 +1,21 @@
+
+> crm-app@0.1.0 build
+> next build
+
+Γû▓ Next.js 16.3.4 (Turbopack)
+- Environments: .env.local
+Γ£ô Running next.config.ts took 55ms
+
+ΓÜá The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 3.6s
+  Running TypeScript ...
+app/invoices/[id]/edit/page.tsx(124,77): error TS2339: Property 'id' does not exist on type 'Promise<{ id: string; }>'.
+app/quotations/[id]/edit/page.tsx(119,79): error TS2339: Property 'id' does not exist on type 'Promise<{ id: string; }>'.
+Failed to type check.
+

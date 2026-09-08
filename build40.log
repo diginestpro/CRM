@@ -1,0 +1,32 @@
+
+> crm-app@0.1.0 build
+> next build
+
+Γû▓ Next.js 16.3.4 (Turbopack)
+- Environments: .env.local
+Γ£ô Running next.config.ts took 68ms
+
+ΓÜá The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+
+> Build error occurred
+Error: Turbopack build failed with 1 error:
+./app/settings/page.tsx:9:5
+Error: Expected ',', got '{'
+   7 |   const sections = [
+   8 |     { title: "Payment Settings", description: "Connect Stripe, PayPal, and SafePay.", icon...
+>  9 |     { title: "Profile Settings", description: "Update your personal info.", icon: User, hr...
+     |     ^
+  10 |     { title: "Notifications", description: "Manage alerts and updates.", icon: Bell, href:...
+  11 |     { title: "Security", description: "Passwords and 2FA.", icon: ShieldCheck, href: "/set...
+  12 |   ]
+
+Parsing ecmascript source code failed
+
+
+    at <unknown> (./app/settings/page.tsx:9:5)

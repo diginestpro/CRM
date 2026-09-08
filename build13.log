@@ -1,0 +1,30 @@
+
+> crm-app@0.1.0 build
+> next build
+
+Γû▓ Next.js 16.3.4 (Turbopack)
+- Environments: .env.local
+Γ£ô Running next.config.ts took 63ms
+
+ΓÜá The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 2.9s
+  Running TypeScript ...
+app/invoices/[id]/edit/page.tsx(42,68): error TS2304: Cannot find name 'id'.
+app/invoices/[id]/edit/page.tsx(50,9): error TS2552: Cannot find name 'reset'. Did you mean 'onreset'?
+app/invoices/[id]/edit/page.tsx(57,7): error TS2304: Cannot find name 'id'.
+app/invoices/[id]/edit/page.tsx(57,11): error TS2552: Cannot find name 'reset'. Did you mean 'onreset'?
+app/invoices/[id]/edit/page.tsx(96,21): error TS2552: Cannot find name 'inv'. Did you mean 'invE'?
+app/quotations/[id]/edit/page.tsx(41,72): error TS2304: Cannot find name 'id'.
+app/quotations/[id]/edit/page.tsx(56,7): error TS2304: Cannot find name 'id'.
+app/quotations/[id]/edit/page.tsx(56,11): error TS2448: Block-scoped variable 'reset' used before its declaration.
+app/quotations/[id]/edit/page.tsx(56,11): error TS2454: Variable 'reset' is used before being assigned.
+app/quotations/[id]/edit/page.tsx(94,23): error TS2304: Cannot find name 'id'.
+app/quotations/[id]/edit/page.tsx(99,19): error TS2345: Argument of type 'RegExp' is not assignable to parameter of type 'string'.
+Failed to type check.
+

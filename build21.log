@@ -1,0 +1,35 @@
+
+> crm-app@0.1.0 build
+> next build
+
+Γû▓ Next.js 16.3.4 (Turbopack)
+- Environments: .env.local
+Γ£ô Running next.config.ts took 52ms
+
+ΓÜá The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 6.6s
+  Running TypeScript ...
+.next/dev/types/validator.ts(288,31): error TS2344: Type 'typeof import("C:/Users/LENOVO/Desktop/CRM/app/api/public/invoice/route")' does not satisfy the constraint 'RouteHandlerConfig<"/api/public/invoice">'.
+  Types of property 'GET' are incompatible.
+    Type '(request: Request, { params }: { params: Promise<{ id: string; }>; }) => Promise<NextResponse<{ invoice: any; }> | NextResponse<{ error: any; }>>' is not assignable to type '(request: NextRequest, context: { params: Promise<{}>; }) => void | Response | Promise<void | Response>'.
+      Types of parameters '__1' and 'context' are incompatible.
+        Type '{ params: Promise<{}>; }' is not assignable to type '{ params: Promise<{ id: string; }>; }'.
+          Types of property 'params' are incompatible.
+            Type 'Promise<{}>' is not assignable to type 'Promise<{ id: string; }>'.
+              Property 'id' is missing in type '{}' but required in type '{ id: string; }'.
+.next/types/validator.ts(288,31): error TS2344: Type 'typeof import("C:/Users/LENOVO/Desktop/CRM/app/api/public/invoice/route")' does not satisfy the constraint 'RouteHandlerConfig<"/api/public/invoice">'.
+  Types of property 'GET' are incompatible.
+    Type '(request: Request, { params }: { params: Promise<{ id: string; }>; }) => Promise<NextResponse<{ invoice: any; }> | NextResponse<{ error: any; }>>' is not assignable to type '(request: NextRequest, context: { params: Promise<{}>; }) => void | Response | Promise<void | Response>'.
+      Types of parameters '__1' and 'context' are incompatible.
+        Type '{ params: Promise<{}>; }' is not assignable to type '{ params: Promise<{ id: string; }>; }'.
+          Types of property 'params' are incompatible.
+            Type 'Promise<{}>' is not assignable to type 'Promise<{ id: string; }>'.
+              Property 'id' is missing in type '{}' but required in type '{ id: string; }'.
+Failed to type check.
+

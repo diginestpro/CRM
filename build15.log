@@ -1,0 +1,41 @@
+
+> crm-app@0.1.0 build
+> next build
+
+Γû▓ Next.js 16.3.4 (Turbopack)
+- Environments: .env.local
+Γ£ô Running next.config.ts took 82ms
+
+ΓÜá The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 3.0s
+  Running TypeScript ...
+app/invoices/[id]/edit/page.tsx(54,52): error TS7006: Parameter 'i' implicitly has an 'any' type.
+app/invoices/[id]/edit/page.tsx(85,31): error TS18046: 'e' is of type 'unknown'.
+app/invoices/[id]/edit/page.tsx(122,23): error TS2322: Type 'Control<{ client_id: string; invoice_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; due_date?: string | undefined; }, any, { ...; }>' is not assignable to type 'Control<any>'.
+  The types of '_options.validate' are incompatible between these types.
+    Type 'ValidateForm<{ client_id: string; invoice_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; due_date?: string | undefined; }> | undefined' is not assignable to type 'ValidateForm<any> | undefined'.
+      Type 'ValidateForm<{ client_id: string; invoice_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; due_date?: string | undefined; }>' is not assignable to type 'ValidateForm<any>'.
+        Types of parameters 'props' and 'props' are incompatible.
+          Type '{ formValues: any; formState: FormState<any>; eventType?: ValidateFormEventType | undefined; name?: string | string[] | undefined; }' is not assignable to type '{ formValues: { client_id: string; invoice_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; due_date?: string | undefined; }; formState: FormState<...>; eventType?: ValidateFormEventType | undefined; name?: "client_id" | ... 10 ...'.
+            Types of property 'name' are incompatible.
+              Type 'string | string[] | undefined' is not assignable to type '"client_id" | "invoice_number" | "status" | "due_date" | "items" | `items.${number}` | `items.${number}.service_id` | `items.${number}.quantity` | `items.${number}.unit_price` | `items.${number}.description` | ("client_id" | "invoice_number" | "status" | "due_date" | ... 5 more ... | `items.${number}.description`)[]...'.
+                Type 'string' is not assignable to type '"client_id" | "invoice_number" | "status" | "due_date" | "items" | `items.${number}` | `items.${number}.service_id` | `items.${number}.quantity` | `items.${number}.unit_price` | `items.${number}.description` | ("client_id" | "invoice_number" | "status" | "due_date" | ... 5 more ... | `items.${number}.description`)[]...'.
+app/quotations/[id]/edit/page.tsx(53,54): error TS7006: Parameter 'i' implicitly has an 'any' type.
+app/quotations/[id]/edit/page.tsx(84,31): error TS18046: 'e' is of type 'unknown'.
+app/quotations/[id]/edit/page.tsx(117,23): error TS2322: Type 'Control<{ client_id: string; quotation_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; }, any, { client_id: string; quotation_number: string; status: string; items: { ...; }[]; }>' is not assignable to type 'Control<any>'.
+  The types of '_options.validate' are incompatible between these types.
+    Type 'ValidateForm<{ client_id: string; quotation_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; }> | undefined' is not assignable to type 'ValidateForm<any> | undefined'.
+      Type 'ValidateForm<{ client_id: string; quotation_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; }>' is not assignable to type 'ValidateForm<any>'.
+        Types of parameters 'props' and 'props' are incompatible.
+          Type '{ formValues: any; formState: FormState<any>; eventType?: ValidateFormEventType | undefined; name?: string | string[] | undefined; }' is not assignable to type '{ formValues: { client_id: string; quotation_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; }; formState: FormState<...>; eventType?: ValidateFormEventType | undefined; name?: "client_id" | ... 9 more ... | undefined; }'.
+            Types of property 'name' are incompatible.
+              Type 'string | string[] | undefined' is not assignable to type '"client_id" | "status" | "items" | `items.${number}` | `items.${number}.service_id` | `items.${number}.quantity` | `items.${number}.unit_price` | `items.${number}.description` | "quotation_number" | ("client_id" | "status" | "items" | `items.${number}` | `items.${number}.service_id` | `items.${number}.quantity` | `i...'.
+                Type 'string' is not assignable to type '"client_id" | "status" | "items" | `items.${number}` | `items.${number}.service_id` | `items.${number}.quantity` | `items.${number}.unit_price` | `items.${number}.description` | "quotation_number" | ("client_id" | "status" | "items" | `items.${number}` | `items.${number}.service_id` | `items.${number}.quantity` | `i...'.
+Failed to type check.
+

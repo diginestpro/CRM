@@ -1,0 +1,36 @@
+
+> crm-app@0.1.0 build
+> next build
+
+Γû▓ Next.js 16.3.4 (Turbopack)
+- Environments: .env.local
+Γ£ô Running next.config.ts took 149ms
+
+ΓÜá The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+
+> Build error occurred
+Error: Turbopack build failed with 1 error:
+./app/(authed)/settings/team/page.tsx:4:1
+Error: Module not found: Can't resolve '@/components/ui/badge'
+  2 | import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/...
+  3 | import { Button } from "@/components/ui/button"
+> 4 | import { Badge } from "@/components/ui/badge"
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  5 | import { Users, Mail, MoreVertical, UserPlus } from "lucide-react"
+  6 |
+  7 | export default async function TeamSettingsPage() {
+
+Import map: aliased to relative './components/ui/badge' inside of [project]/
+
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+    at <unknown> (./app/(authed)/settings/team/page.tsx:4:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)

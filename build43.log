@@ -1,0 +1,41 @@
+
+> crm-app@0.1.0 build
+> next build
+
+Γû▓ Next.js 16.3.4 (Turbopack)
+- Environments: .env.local
+Γ£ô Running next.config.ts took 90ms
+
+ΓÜá The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 3.0s
+  Running TypeScript ...
+app/dashboard/page.tsx(31,21): error TS7031: Binding element 'title' implicitly has an 'any' type.
+app/dashboard/page.tsx(31,28): error TS7031: Binding element 'value' implicitly has an 'any' type.
+app/dashboard/page.tsx(31,41): error TS7031: Binding element 'Icon' implicitly has an 'any' type.
+app/dashboard/page.tsx(31,47): error TS7031: Binding element 'description' implicitly has an 'any' type.
+app/invoices/[id]/page.tsx(35,35): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+app/payments/page.tsx(19,21): error TS2345: Argument of type 'any[]' is not assignable to parameter of type 'SetStateAction<never[]>'.
+  Type 'any[]' is not assignable to type 'never[]'.
+    Type 'any' is not assignable to type 'never'.
+app/payments/page.tsx(27,103): error TS2339: Property 'amount' does not exist on type 'never'.
+app/payments/page.tsx(28,100): error TS2339: Property 'amount' does not exist on type 'never'.
+app/payments/page.tsx(48,32): error TS2339: Property 'id' does not exist on type 'never'.
+app/payments/page.tsx(49,40): error TS2339: Property 'payment_date' does not exist on type 'never'.
+app/payments/page.tsx(50,55): error TS2339: Property 'invoices' does not exist on type 'never'.
+app/payments/page.tsx(51,31): error TS2339: Property 'invoices' does not exist on type 'never'.
+app/payments/page.tsx(52,31): error TS2339: Property 'payment_method' does not exist on type 'never'.
+app/payments/page.tsx(53,68): error TS2339: Property 'amount' does not exist on type 'never'.
+app/payments/page.tsx(54,98): error TS2339: Property 'status' does not exist on type 'never'.
+app/payments/page.tsx(54,192): error TS2339: Property 'status' does not exist on type 'never'.
+app/quotations/[id]/page.tsx(35,35): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+app/services/page.tsx(10,14): error TS7019: Rest parameter 'classes' implicitly has an 'any[]' type.
+Failed to type check.
+

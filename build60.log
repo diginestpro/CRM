@@ -1,0 +1,23 @@
+
+> crm-app@0.1.0 build
+> next build
+
+Γû▓ Next.js 16.3.4 (Turbopack)
+- Environments: .env.local
+Γ£ô Running next.config.ts took 88ms
+
+ΓÜá The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 8.9s
+  Running TypeScript ...
+app/(authed)/settings/profile/page.tsx(22,51): error TS2345: Argument of type '{ id: string; full_name: string; email: string; phone: string; avatar_url: string; }' is not assignable to parameter of type 'Profile | (() => Profile)'.
+  Property 'country' is missing in type '{ id: string; full_name: string; email: string; phone: string; avatar_url: string; }' but required in type 'Profile'.
+app/(authed)/settings/profile/page.tsx(33,22): error TS2345: Argument of type '{ id: any; full_name: any; email: any; phone: any; avatar_url: any; }' is not assignable to parameter of type 'SetStateAction<Profile>'.
+  Property 'country' is missing in type '{ id: any; full_name: any; email: any; phone: any; avatar_url: any; }' but required in type 'Profile'.
+Failed to type check.
+

@@ -1,0 +1,73 @@
+
+> crm-app@0.1.0 build
+> next build
+
+Γû▓ Next.js 16.3.4 (Turbopack)
+- Environments: .env.local
+Γ£ô Running next.config.ts took 81ms
+
+ΓÜá The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 33.0s
+  Running TypeScript ...
+  Finished TypeScript in 49s ...
+  Collecting page data using 3 workers ...
+  Generating static pages using 3 workers (0/29) ...
+  Generating static pages using 3 workers (7/29) 
+  Generating static pages using 3 workers (14/29) 
+  Generating static pages using 3 workers (21/29) 
+Γ£ô Generating static pages using 3 workers (29/29) in 2.5s
+  Finalizing page optimization ...
+
+Route (app)
+Γöî Γùï /
+Γö£ Γùï /_not-found
+Γö£ ╞Æ /activity
+Γö£ ╞Æ /api/debug/check-items
+Γö£ ╞Æ /api/debug/currency-check
+Γö£ ╞Æ /api/payments/checkout
+Γö£ ╞Æ /api/payments/test
+Γö£ ╞Æ /api/payments/webhook
+Γö£ ╞Æ /api/public/invoice/[id]
+Γö£ ╞Æ /api/settings/email/test
+Γö£ ╞Æ /api/settings/payments
+Γö£ ╞Æ /clients
+Γö£ ╞Æ /clients/[id]
+Γö£ ╞Æ /clients/[id]/edit
+Γö£ ╞Æ /clients/new
+Γö£ ╞Æ /dashboard
+Γö£ ╞Æ /invoices
+Γö£ ╞Æ /invoices/[id]
+Γö£ ╞Æ /invoices/[id]/edit
+Γö£ ╞Æ /invoices/new
+Γö£ Γùï /login
+Γö£ Γùï /onboarding
+Γö£ ╞Æ /pay/[id]
+Γö£ ╞Æ /payments
+Γö£ ╞Æ /quotations
+Γö£ ╞Æ /quotations/[id]
+Γö£ ╞Æ /quotations/[id]/edit
+Γö£ ╞Æ /quotations/new
+Γö£ Γùï /register
+Γö£ ╞Æ /services
+Γö£ ╞Æ /services/[id]/edit
+Γö£ ╞Æ /services/new
+Γö£ ╞Æ /settings
+Γö£ ╞Æ /settings/email
+Γö£ ╞Æ /settings/notifications
+Γö£ ╞Æ /settings/payments
+Γö£ ╞Æ /settings/profile
+Γö£ ╞Æ /settings/security
+Γöö ╞Æ /settings/team
+
+
+╞Æ Proxy (Middleware)
+
+Γùï  (Static)   prerendered as static content
+╞Æ  (Dynamic)  server-rendered on demand
+

@@ -1,0 +1,87 @@
+
+> crm-app@0.1.0 build
+> next build
+
+Γû▓ Next.js 16.3.4 (Turbopack)
+- Environments: .env.local
+Γ£ô Running next.config.ts took 71ms
+
+ΓÜá The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 4.2s
+  Running TypeScript ...
+app/invoices/[id]/edit/page.tsx(39,5): error TS2322: Type 'Resolver<{ client_id: string; invoice_number: string; status: string; items: { service_id: string; quantity: unknown; unit_price: unknown; description?: string | undefined; }[]; due_date?: string | undefined; }, any, { ...; }>' is not assignable to type 'Resolver<{ client_id: string; invoice_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; due_date?: string | undefined; }, any, { ...; }>'.
+  Types of parameters 'options' and 'options' are incompatible.
+    Type 'ResolverOptions<{ client_id: string; invoice_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; due_date?: string | undefined; }>' is not assignable to type 'ResolverOptions<{ client_id: string; invoice_number: string; status: string; items: { service_id: string; quantity: unknown; unit_price: unknown; description?: string | undefined; }[]; due_date?: string | undefined; }>'.
+      Type '{ service_id: string; quantity: unknown; unit_price: unknown; description?: string | undefined; }[]' is not assignable to type '{ service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]'.
+        Type '{ service_id: string; quantity: unknown; unit_price: unknown; description?: string | undefined; }' is not assignable to type '{ service_id: string; quantity: number; unit_price: number; description?: string | undefined; }'.
+          Types of property 'quantity' are incompatible.
+            Type 'unknown' is not assignable to type 'number'.
+app/invoices/[id]/edit/page.tsx(95,36): error TS2345: Argument of type '(v: { client_id: string; invoice_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; due_date?: string | undefined; }) => Promise<...>' is not assignable to parameter of type 'SubmitHandler<TFieldValues, Promise<void>>'.
+  Types of parameters 'v' and 'data' are incompatible.
+    Type 'TFieldValues' is not assignable to type '{ client_id: string; invoice_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; due_date?: string | undefined; }'.
+      Type 'FieldValues' is missing the following properties from type '{ client_id: string; invoice_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; due_date?: string | undefined; }': client_id, invoice_number, status, items
+app/invoices/new/page.tsx(39,5): error TS2322: Type 'Resolver<{ client_id: string; invoice_number: string; status: string; items: { service_id: string; quantity: unknown; unit_price: unknown; description?: string | undefined; }[]; due_date?: string | undefined; }, any, { ...; }>' is not assignable to type 'Resolver<{ client_id: string; invoice_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; due_date?: string | undefined; }, any, { ...; }>'.
+  Types of parameters 'options' and 'options' are incompatible.
+    Type 'ResolverOptions<{ client_id: string; invoice_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; due_date?: string | undefined; }>' is not assignable to type 'ResolverOptions<{ client_id: string; invoice_number: string; status: string; items: { service_id: string; quantity: unknown; unit_price: unknown; description?: string | undefined; }[]; due_date?: string | undefined; }>'.
+      Type '{ service_id: string; quantity: unknown; unit_price: unknown; description?: string | undefined; }[]' is not assignable to type '{ service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]'.
+        Type '{ service_id: string; quantity: unknown; unit_price: unknown; description?: string | undefined; }' is not assignable to type '{ service_id: string; quantity: number; unit_price: number; description?: string | undefined; }'.
+          Types of property 'quantity' are incompatible.
+            Type 'unknown' is not assignable to type 'number'.
+app/invoices/new/page.tsx(91,36): error TS2345: Argument of type '(v: { client_id: string; invoice_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; due_date?: string | undefined; }) => Promise<...>' is not assignable to parameter of type 'SubmitHandler<TFieldValues, Promise<void>>'.
+  Types of parameters 'v' and 'data' are incompatible.
+    Type 'TFieldValues' is not assignable to type '{ client_id: string; invoice_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; due_date?: string | undefined; }'.
+      Type 'FieldValues' is missing the following properties from type '{ client_id: string; invoice_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; due_date?: string | undefined; }': client_id, invoice_number, status, items
+app/quotations/[id]/edit/page.tsx(38,5): error TS2322: Type 'Resolver<{ client_id: string; quotation_number: string; status: string; items: { service_id: string; quantity: unknown; unit_price: unknown; description?: string | undefined; }[]; }, any, { client_id: string; quotation_number: string; status: string; items: { ...; }[]; }>' is not assignable to type 'Resolver<{ client_id: string; quotation_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; }, any, { client_id: string; quotation_number: string; status: string; items: { ...; }[]; }>'.
+  Types of parameters 'options' and 'options' are incompatible.
+    Type 'ResolverOptions<{ client_id: string; quotation_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; }>' is not assignable to type 'ResolverOptions<{ client_id: string; quotation_number: string; status: string; items: { service_id: string; quantity: unknown; unit_price: unknown; description?: string | undefined; }[]; }>'.
+      Type '{ service_id: string; quantity: unknown; unit_price: unknown; description?: string | undefined; }[]' is not assignable to type '{ service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]'.
+        Type '{ service_id: string; quantity: unknown; unit_price: unknown; description?: string | undefined; }' is not assignable to type '{ service_id: string; quantity: number; unit_price: number; description?: string | undefined; }'.
+          Types of property 'quantity' are incompatible.
+            Type 'unknown' is not assignable to type 'number'.
+app/quotations/[id]/edit/page.tsx(94,36): error TS2345: Argument of type '(v: { client_id: string; quotation_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; }) => Promise<void>' is not assignable to parameter of type 'SubmitHandler<TFieldValues, Promise<void>>'.
+  Types of parameters 'v' and 'data' are incompatible.
+    Type 'TFieldValues' is not assignable to type '{ client_id: string; quotation_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; }'.
+      Type 'FieldValues' is missing the following properties from type '{ client_id: string; quotation_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; }': client_id, quotation_number, status, items
+app/quotations/new/page.tsx(38,5): error TS2322: Type 'Resolver<{ client_id: string; quotation_number: string; status: string; items: { service_id: string; quantity: unknown; unit_price: unknown; description?: string | undefined; }[]; }, any, { client_id: string; quotation_number: string; status: string; items: { ...; }[]; }>' is not assignable to type 'Resolver<{ client_id: string; quotation_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; }, any, { client_id: string; quotation_number: string; status: string; items: { ...; }[]; }>'.
+  Types of parameters 'options' and 'options' are incompatible.
+    Type 'ResolverOptions<{ client_id: string; quotation_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; }>' is not assignable to type 'ResolverOptions<{ client_id: string; quotation_number: string; status: string; items: { service_id: string; quantity: unknown; unit_price: unknown; description?: string | undefined; }[]; }>'.
+      Type '{ service_id: string; quantity: unknown; unit_price: unknown; description?: string | undefined; }[]' is not assignable to type '{ service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]'.
+        Type '{ service_id: string; quantity: unknown; unit_price: unknown; description?: string | undefined; }' is not assignable to type '{ service_id: string; quantity: number; unit_price: number; description?: string | undefined; }'.
+          Types of property 'quantity' are incompatible.
+            Type 'unknown' is not assignable to type 'number'.
+app/quotations/new/page.tsx(89,36): error TS2345: Argument of type '(v: { client_id: string; quotation_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; }) => Promise<void>' is not assignable to parameter of type 'SubmitHandler<TFieldValues, Promise<void>>'.
+  Types of parameters 'v' and 'data' are incompatible.
+    Type 'TFieldValues' is not assignable to type '{ client_id: string; quotation_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; }'.
+      Type 'FieldValues' is missing the following properties from type '{ client_id: string; quotation_number: string; status: string; items: { service_id: string; quantity: number; unit_price: number; description?: string | undefined; }[]; }': client_id, quotation_number, status, items
+app/services/[id]/edit/page.tsx(31,5): error TS2322: Type 'Resolver<{ name: string; base_price: unknown; unit_type: string; is_active: boolean; description?: string | undefined; }, any, { name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }>' is not assignable to type 'Resolver<{ name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }, any, { name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }>'.
+  Types of parameters 'options' and 'options' are incompatible.
+    Type 'ResolverOptions<{ name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }>' is not assignable to type 'ResolverOptions<{ name: string; base_price: unknown; unit_type: string; is_active: boolean; description?: string | undefined; }>'.
+      Type 'unknown' is not assignable to type 'number'.
+app/services/[id]/edit/page.tsx(93,38): error TS2345: Argument of type '(values: { name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }) => Promise<void>' is not assignable to parameter of type 'SubmitHandler<TFieldValues, Promise<void>>'.
+  Types of parameters 'values' and 'data' are incompatible.
+    Type 'TFieldValues' is not assignable to type '{ name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }'.
+      Type 'FieldValues' is missing the following properties from type '{ name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }': name, base_price, unit_type, is_active
+app/services/new/page.tsx(30,5): error TS2322: Type 'Resolver<{ name: string; base_price: unknown; unit_type: string; is_active: boolean; description?: string | undefined; }, any, { name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }>' is not assignable to type 'Resolver<{ name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }, any, { name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }>'.
+  Types of parameters 'options' and 'options' are incompatible.
+    Type 'ResolverOptions<{ name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }>' is not assignable to type 'ResolverOptions<{ name: string; base_price: unknown; unit_type: string; is_active: boolean; description?: string | undefined; }>'.
+      Type 'unknown' is not assignable to type 'number'.
+app/services/new/page.tsx(83,38): error TS2345: Argument of type '(values: { name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }) => Promise<void>' is not assignable to parameter of type 'SubmitHandler<TFieldValues, Promise<void>>'.
+  Types of parameters 'values' and 'data' are incompatible.
+    Type 'TFieldValues' is not assignable to type '{ name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }'.
+      Type 'FieldValues' is missing the following properties from type '{ name: string; base_price: number; unit_type: string; is_active: boolean; description?: string | undefined; }': name, base_price, unit_type, is_active
+components/billing/record-payment-modal.tsx(36,5): error TS2322: Type 'Resolver<{ amount: unknown; payment_date: string; payment_method: string; transaction_id?: string | undefined; notes?: string | undefined; }, any, { amount: number; payment_date: string; payment_method: string; transaction_id?: string | undefined; notes?: string | undefined; }>' is not assignable to type 'Resolver<{ amount: number; payment_date: string; payment_method: string; transaction_id?: string | undefined; notes?: string | undefined; }, any, { amount: number; payment_date: string; payment_method: string; transaction_id?: string | undefined; notes?: string | undefined; }>'.
+  Types of parameters 'options' and 'options' are incompatible.
+    Type 'ResolverOptions<{ amount: number; payment_date: string; payment_method: string; transaction_id?: string | undefined; notes?: string | undefined; }>' is not assignable to type 'ResolverOptions<{ amount: unknown; payment_date: string; payment_method: string; transaction_id?: string | undefined; notes?: string | undefined; }>'.
+      Type 'unknown' is not assignable to type 'number'.
+components/billing/record-payment-modal.tsx(109,38): error TS2345: Argument of type '(v: { amount: number; payment_date: string; payment_method: string; transaction_id?: string | undefined; notes?: string | undefined; }) => Promise<void>' is not assignable to parameter of type 'SubmitHandler<TFieldValues, Promise<void>>'.
+  Types of parameters 'v' and 'data' are incompatible.
+    Type 'TFieldValues' is not assignable to type '{ amount: number; payment_date: string; payment_method: string; transaction_id?: string | undefined; notes?: string | undefined; }'.
+      Type 'FieldValues' is missing the following properties from type '{ amount: number; payment_date: string; payment_method: string; transaction_id?: string | undefined; notes?: string | undefined; }': amount, payment_date, payment_method
+Failed to type check.
+

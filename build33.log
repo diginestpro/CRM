@@ -1,0 +1,35 @@
+
+> crm-app@0.1.0 build
+> next build
+
+Γû▓ Next.js 16.3.4 (Turbopack)
+- Environments: .env.local
+Γ£ô Running next.config.ts took 86ms
+
+ΓÜá The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+
+> Build error occurred
+Error: Turbopack build failed with 2 errors:
+./app/settings
+Error: You cannot have two parallel pages that resolve to the same path. Please check /(app)/settings/payments and /settings.
+
+./app/api/stripe/connect/callback/route.ts:16:7
+Error: Expected ',', got 'ident'
+  14 |       method: "POST",
+  15 |       headers: { "Content-Type": "application/x-www-form-urlencoded" }
+> 16 |       body: new URLSearchParams({
+     |       ^^^^
+  17 |         grant_type: "authorization_code",
+  18 |         client_id: process.env.STRIPE_CLIENT_ID!,
+  19 |         client_secret: process.env.STRIPE_SECRET_KEY!,
+
+Parsing ecmascript source code failed
+
+
+    at <unknown> (./app/api/stripe/connect/callback/route.ts:16:7)

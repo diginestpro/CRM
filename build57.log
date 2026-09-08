@@ -1,0 +1,32 @@
+
+> crm-app@0.1.0 build
+> next build
+
+Γû▓ Next.js 16.3.4 (Turbopack)
+- Environments: .env.local
+Γ£ô Running next.config.ts took 55ms
+
+ΓÜá The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+
+> Build error occurred
+Error: Turbopack build failed with 1 error:
+./app/(authed)/settings/profile/page.tsx:124:40
+Error: Expected '</', got ','
+  122 |                 value={profile.email}
+  123 |                 disabled
+> 124 |                 className="bg-slate-50",
+      |                                        ^
+  125 |               />
+  126 |             </div>
+  127 |             <p className="text-xs text-slate-500">Email cannot be changed here. Contact s...
+
+Parsing ecmascript source code failed
+
+
+    at <unknown> (./app/(authed)/settings/profile/page.tsx:124:40)

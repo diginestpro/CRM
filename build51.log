@@ -1,0 +1,39 @@
+
+> crm-app@0.1.0 build
+> next build
+
+Γû▓ Next.js 16.3.4 (Turbopack)
+- Environments: .env.local
+Γ£ô Running next.config.ts took 90ms
+
+ΓÜá The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 11.5s
+  Running TypeScript ...
+.next/dev/types/validator.ts(71,39): error TS2307: Cannot find module '../../../app/clients/[id]/edit/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(80,39): error TS2307: Cannot find module '../../../app/clients/[id]/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(89,39): error TS2307: Cannot find module '../../../app/clients/new/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(98,39): error TS2307: Cannot find module '../../../app/clients/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(107,39): error TS2307: Cannot find module '../../../app/invoices/[id]/edit/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(116,39): error TS2307: Cannot find module '../../../app/invoices/[id]/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(125,39): error TS2307: Cannot find module '../../../app/invoices/new/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(134,39): error TS2307: Cannot find module '../../../app/invoices/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(179,39): error TS2307: Cannot find module '../../../app/quotations/[id]/edit/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(188,39): error TS2307: Cannot find module '../../../app/quotations/[id]/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(197,39): error TS2307: Cannot find module '../../../app/quotations/new/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(206,39): error TS2307: Cannot find module '../../../app/quotations/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(224,39): error TS2307: Cannot find module '../../../app/services/[id]/edit/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(233,39): error TS2307: Cannot find module '../../../app/services/new/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(242,39): error TS2307: Cannot find module '../../../app/services/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(251,39): error TS2307: Cannot find module '../../../app/settings/notifications/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(260,39): error TS2307: Cannot find module '../../../app/settings/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(269,39): error TS2307: Cannot find module '../../../app/settings/payments/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(278,39): error TS2307: Cannot find module '../../../app/settings/profile/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(287,39): error TS2307: Cannot find module '../../../app/settings/security/page.js' or its corresponding type declarations.
+Failed to type check.
+
