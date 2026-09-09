@@ -29,6 +29,8 @@ interface AppSettingsView {
   app_url: string
   default_currency_code: string
   default_timezone: string
+  brand_name: string
+  company_website: string
 }
 
 const DEFAULT_GATEWAY: GatewayView = {
@@ -49,6 +51,8 @@ const DEFAULT_APP: AppSettingsView = {
   app_url: "",
   default_currency_code: "USD",
   default_timezone: "UTC",
+  brand_name: "",
+  company_website: "",
 }
 
 const TIMEZONES = [
@@ -285,6 +289,26 @@ function PaymentsSettingsContent() {
               >
                 {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
               </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
+            <div className="md:col-span-2">
+              <Label>Brand Name</Label>
+              <Input
+                value={appSettings.brand_name}
+                onChange={(e) => setAppSettings({ ...appSettings, brand_name: e.target.value })}
+                placeholder="Leave empty to use your company name"
+              />
+              <p className="text-xs text-slate-500 mt-1">Displayed in the navbar, sidebar, emails, and footers. Falls back to your company name when empty.</p>
+            </div>
+            <div className="md:col-span-2">
+              <Label>Company Website</Label>
+              <Input
+                value={appSettings.company_website}
+                onChange={(e) => setAppSettings({ ...appSettings, company_website: e.target.value })}
+                placeholder="https://example.com"
+              />
+              <p className="text-xs text-slate-500 mt-1">Used in the email footer (Refund Policy / Terms links) and the pay page "Powered by" link. Falls back to https://diginest.pro when empty.</p>
             </div>
           </div>
           <div className="flex justify-end">

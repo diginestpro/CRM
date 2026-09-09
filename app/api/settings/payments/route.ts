@@ -101,6 +101,8 @@ export async function GET() {
       app_url: appSettings?.app_url || "",
       default_currency_code: appSettings?.default_currency_code || "USD",
       default_timezone: appSettings?.default_timezone || "UTC",
+      brand_name: appSettings?.brand_name || "",
+      company_website: appSettings?.company_website || "",
     }
 
     return NextResponse.json({ success: true, settings: result })
@@ -149,6 +151,8 @@ export async function POST(req: Request) {
         app_url: as.app_url || null,
         default_currency_code: as.default_currency_code || null,
         default_timezone: as.default_timezone || "UTC",
+        brand_name: as.brand_name || null,
+        company_website: as.company_website || null,
         updated_at: new Date().toISOString(),
       }
       const { error } = await supabase

@@ -1,0 +1,23 @@
+Consolidate 0009-0012 into a single SQL + add brand_name / company_website UI in Settings
+
+Database:
+- supabase/migrations/0009-0012_consolidated_single_file.sql merges
+  migrations 0009, 0010, 0011, and the new 0012 backfill into ONE
+  file the user can paste into the Supabase SQL editor once. Every
+  block uses IF NOT EXISTS / CREATE OR REPLACE so it is safe to re-run.
+- Block 4 (new 0012) backfills invoice_payment_methods rows for every
+  existing invoice that has none yet (using the company's currently
+  active gateways, intersected with client.allowed_gateways when set).
+  This is what makes the per-invoice gateway picker actually drive
+  /pay/[id] for invoices created before migration 0009 ran.
+
+Code:
+- app/(authed)/settings/payments/page.tsx: brand_name + company_website
+  inputs added to the App Settings card.
+- app/api/settings/payments/route.ts: GET returns both new fields;
+  POST writes them. The /api/settings/payments endpoint is now the
+  single source of truth for "what is our brand called and what is
+  our website URL". lib/branding.ts reads these and falls back to
+  companies.name / BRAND_NAME_FALLBACK when they're empty.
+
+tsc --noEmit: 0 errors.
