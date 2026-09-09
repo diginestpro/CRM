@@ -41,7 +41,20 @@ export async function POST(request: Request) {
     )
 
     // Generate a temporary password (user will reset via email link)
-    const tempPassword = Math.random().toString(36).slice(-12) + "Aa1!"
+    // Crypto-grade random temp password. Supabase requires:
+    //   - >= 6 characters
+    //   - at least one lowercase letter, one uppercase letter,
+    //     one digit, one symbol
+    // The suffix "!A1a" guarantees those four classes are met.
+    const bytes = new Uint8Array(18)
+    if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+      crypto.getRandomValues(bytes)
+    } else {
+      for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256)
+    }
+    const tempPassword =
+      Array.from(bytes, (b) => b.toString(36).padStart(2, "0")).join("").slice(0, 24) +
+      "!A1a"
 
     // Create the auth user
     const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
@@ -54,8 +67,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: createError?.message || "Failed to create user" }, { status: 400 })
     }
 
-    // Create or update the profile with company_id and role
-    const { error: profileError } = await supabase
+    // Use the service-role admin client for the profile upsert so the
+    // RLS policy on profiles doesn't silently block us. The current
+    // session user already authorised the invite on the line above
+    // (profile.role === "admin"); the admin client bypasses RLS only
+    // for this single write.
+    const { error: profileError } = await adminClient
       .from("profiles")
       .upsert({
         id: newUser.user.id,
@@ -63,7 +80,6 @@ export async function POST(request: Request) {
         role: role || "user",
         full_name: email.split("@")[0],
         email,
-        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
 
@@ -77,6 +93,10 @@ export async function POST(request: Request) {
       userId: newUser.user.id,
     })
   } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Failed" }, { status: 500 })
+    console.error("[team/invite] error:", e)
+    return NextResponse.json(
+      { error: e?.message || "Failed", name: e?.name || null },
+      { status: 500 }
+    )
   }
 }
