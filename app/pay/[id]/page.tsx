@@ -94,8 +94,19 @@ function InvoiceContent({ params }: { params: Promise<{ id: string }> }) {
         setPaymentAmount(String((inv.total_amount || 0) - (inv.amount_paid || 0)))
         setClient(inv.clients || null)
         setCompany(inv.companies || null)
-        setAllowedMethods(data.allowed_methods || ["stripe", "paypal", "safepay"])
-        if (data.allowed_methods?.length > 0) setSelectedGateway(data.allowed_methods[0])
+        // The server returns the resolved allowed_methods list inside
+        // data.invoice.allowed_methods. The previous code read
+        // data.allowed_methods (which is always undefined), causing the
+        // UI to fall back to the hard-coded ["stripe","paypal","safepay"]
+        // list - so deactivated gateways (e.g. Stripe with is_active=false)
+        // were still visible on the pay page even though the public API
+        // had already filtered them out.
+        const resolved = inv.allowed_methods
+        const list = Array.isArray(resolved) && resolved.length > 0
+          ? resolved
+          : ["stripe", "paypal", "safepay"]
+        setAllowedMethods(list)
+        if (list.length > 0) setSelectedGateway(list[0])
         // Update paid status based on actual invoice data
         const fullyPaid = (inv.amount_paid || 0) >= (inv.total_amount || 0)
         setCurrentStatus(inv.status || "")
