@@ -87,9 +87,16 @@ export function InvoicePrintLayout({ invoice }: InvoicePrintProps) {
         </div>
       </div>
 
-      <div className="pt-12 text-center text-slate-400 text-sm">
+      <div className="pt-12 text-center text-slate-400 text-sm space-y-1">
         <p>Thank you for your business!</p>
-        <p>Please make payment by the due date mentioned above.</p>
+        <p>
+          <a href="https://diginest.pro/return-refund-policy-service-based-only/" className="underline hover:text-slate-600">Refund Policy</a>
+          {" · "}
+          <a href="https://diginest.pro/" className="underline hover:text-slate-600">DigiNest.pro</a>
+          {" · "}
+          <a href="https://diginest.pro/terms-and-conditions/" className="underline hover:text-slate-600">Terms &amp; Conditions</a>
+        </p>
+        <p>© 2026 DigiNest Solutions</p>
       </div>
     </div>
   )

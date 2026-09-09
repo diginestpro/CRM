@@ -115,7 +115,15 @@ function buildEmailWrapper(company: CompanyBranding, content: string) {
     </div>
     <div style="padding:32px;">${content}</div>
     <div style="padding:16px 32px;background:#f1f5f9;border-top:1px solid #e2e8f0;font-size:11px;color:#64748b;text-align:center;">
-      ${company.footer_text || `Powered by ${company.name}`}
+      ${company.footer_text ? `<div style="margin-bottom:8px;">${company.footer_text}</div>` : ""}
+      <div style="margin-bottom:6px;">
+        <a href="https://diginest.pro/return-refund-policy-service-based-only/" style="color:#64748b;text-decoration:underline;">Refund Policy</a>
+        &nbsp;&middot;&nbsp;
+        <a href="https://diginest.pro/" style="color:#64748b;text-decoration:underline;">DigiNest.pro</a>
+        &nbsp;&middot;&nbsp;
+        <a href="https://diginest.pro/terms-and-conditions/" style="color:#64748b;text-decoration:underline;">Terms &amp; Conditions</a>
+      </div>
+      <div>&copy; 2026 DigiNest Solutions</div>
     </div>
   </div>
 </body>
