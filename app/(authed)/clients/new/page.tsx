@@ -47,8 +47,11 @@ export default function NewClientPage() {
     async function loadGateways() {
       try {
         const res = await fetch("/api/settings/payments").then(r => r.json()).catch(() => null)
-        const list: any[] = res?.gateways || []
-        const active = list.filter((g: any) => g.is_active).map((g: any) => g.gateway_name)
+        const settings = (res && res.settings) || {}
+        const KNOWN = ["stripe", "paypal", "safepay"]
+        const active = KNOWN.filter(
+          (name) => settings[name] && settings[name].is_active === true
+        )
         setActiveGateways(active.map((n: string) => ({ gateway_name: n })))
         setAllowedGateways(active)
       } catch { /* ignore */ }

@@ -96,11 +96,18 @@ export default function NewInvoicePage() {
         setValue("invoice_number", `INV-${stamp}-001`)
       }
 
-      // Load active company payment gateways once
+      // Load active company payment gateways once.
+      // The /api/settings/payments route returns:
+      //   { success, settings: { stripe, paypal, safepay, app_settings } }
+      // where each gateway section has { is_active, api_key, ... }.
       try {
         const res = await fetch("/api/settings/payments").then(r => r.json()).catch(() => null)
-        const list: any[] = res?.gateways || []
-        setActiveGateways(list.filter((g: any) => g.is_active).map((g: any) => ({ gateway_name: g.gateway_name })))
+        const settings = (res && res.settings) || {}
+        const KNOWN = ["stripe", "paypal", "safepay"]
+        const active = KNOWN
+          .filter((name) => settings[name] && settings[name].is_active === true)
+          .map((name) => ({ gateway_name: name }))
+        setActiveGateways(active)
       } catch { /* ignore */ }
 
       // Load the company's office addresses (USA / PK / UAE / ...) so the
