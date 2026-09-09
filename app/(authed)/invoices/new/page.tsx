@@ -310,8 +310,11 @@ export default function NewInvoicePage() {
       </div>
 
       <form onSubmit={(e) => e.preventDefault()}>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <Card className="md:col-span-2">
+        {/* ROW 1: Client (left) + Invoice Basics (right).
+              Basics visible immediately so the user can fill in
+              number/date/tax without scrolling past picker cards. */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle>Client</CardTitle>
               <CardDescription>Select an existing client or create a new one.</CardDescription>
@@ -361,9 +364,53 @@ export default function NewInvoicePage() {
             </CardContent>
           </Card>
 
-          {/* From-office picker: shown unconditionally so the user always
-              picks the office this invoice is billed FROM. Independent
-              per-invoice - does NOT cascade to other invoices. */}
+          {/* Invoice Basics - always visible at the top right so the
+              user can see / change number, status, due date, tax. */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Invoice Basics</CardTitle>
+              <CardDescription>Number, status, due date and tax rate.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <Label>Invoice Number *</Label>
+                <div className="flex gap-2">
+                  <Input {...register("invoice_number")} placeholder="INV-2026-0001" />
+                  <Button type="button" variant="outline" size="icon" onClick={refreshInvoiceNumber} title="Auto-generate">
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </div>
+                {errors.invoice_number && <p className="text-xs text-red-500 mt-1">{errors.invoice_number.message}</p>}
+              </div>
+              <div>
+                <Label>Status</Label>
+                <select {...register("status")} className="mt-1 w-full h-10 rounded-md border border-slate-200 bg-white px-3 text-sm">
+                  <option value="Draft">Draft</option>
+                  <option value="Unpaid">Unpaid (Send to client)</option>
+                </select>
+              </div>
+              <div>
+                <Label>Due Date</Label>
+                <Input type="date" {...register("due_date")} />
+              </div>
+              <div>
+                <Label>Tax Rate (%)</Label>
+                <Input type="number" step="0.01" min="0" max="100" {...register("tax_rate")} placeholder="0" />
+                <p className="text-xs text-slate-500 mt-1">Applied to invoice subtotal</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* ROW 2: Line items (BillingItems) */}
+        <BillingItems control={control} setValue={setValue} watch={watch} services={services} />
+
+        {/* ROW 3: Three compact pickers side-by-side:
+              From Address | Bill-To Address | Payment Gateways.
+              All always visible (gateways show a friendly nudge if
+              none are configured). */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+          {/* From Address */}
           <Card>
             <CardHeader>
               <CardTitle>From Address</CardTitle>
@@ -416,117 +463,123 @@ export default function NewInvoicePage() {
             </CardContent>
           </Card>
 
-          {/* Address selector: only visible once a client is picked */}
-          {selectedClientId && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Bill-To Address</CardTitle>
-                <CardDescription>
-                  Pick one of this client&apos;s saved addresses. It will appear on the invoice, PDF, and email.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {clientAddresses.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-slate-300 p-4 text-sm text-slate-500">
-                    No saved addresses yet. The client&apos;s primary email/country will be used instead.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {clientAddresses.map(a => {
-                      const line1 = [a.street, a.city, a.state, a.postal_code, a.country].filter(Boolean).join(", ")
-                      const checked = (selectedAddressId || "") === a.id
+          {/* Bill-To Address */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Bill-To Address</CardTitle>
+              <CardDescription>
+                {selectedClientId
+                  ? "Pick this client's saved address for the invoice."
+                  : "Pick a client above to load their addresses."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!selectedClientId ? (
+                <div className="rounded-md border border-dashed border-slate-300 p-4 text-sm text-slate-500">
+                  Select a client above to see their saved addresses.
+                </div>
+              ) : clientAddresses.length === 0 ? (
+                <div className="rounded-md border border-dashed border-slate-300 p-4 text-sm text-slate-500">
+                  No saved addresses yet for this client. The primary email/country will be used instead.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {clientAddresses.map(a => {
+                    const line1 = [a.street, a.city, a.state, a.postal_code, a.country].filter(Boolean).join(", ")
+                    const checked = (selectedAddressId || "") === a.id
+                    return (
+                      <label
+                        key={a.id}
+                        className={
+                          "flex items-start gap-3 rounded-md border p-3 cursor-pointer transition " +
+                          (checked ? "border-blue-500 bg-blue-50" : "border-slate-200 hover:border-slate-300")
+                        }
+                      >
+                        <input
+                          type="radio"
+                          name="selected_address"
+                          className="mt-1"
+                          checked={checked}
+                          onChange={() => setSelectedAddressId(a.id)}
+                          />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm">{a.label || "Address"}</span>
+                            {a.is_default && <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">Default</span>}
+                          </div>
+                          <div className="text-xs text-slate-500 mt-0.5">{line1 || "-"}</div>
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Payment Gateways - ALWAYS visible. If no gateways are
+              configured for this company, we show an inline nudge so the
+              user can enable one in Settings -> Payments. */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Payment Gateways</CardTitle>
+              <CardDescription>
+                Which gateways can the client use to pay this invoice?
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {activeGateways.length === 0 ? (
+                <div className="rounded-md border border-dashed border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                  <p className="font-medium">No active payment gateways.</p>
+                  <p className="mt-1">
+                    Enable Stripe, PayPal or SafePay in{" "}
+                    <Link href="/settings/payments" className="underline font-medium">
+                      Settings &rarr; Payments
+                    </Link>{" "}
+                    so the client can pay this invoice.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex flex-col gap-2">
+                    {activeGateways.map(g => {
+                      const name = g.gateway_name
+                      const checked = invoiceGateways.includes(name)
                       return (
                         <label
-                          key={a.id}
+                          key={name}
                           className={
-                            "flex items-start gap-3 rounded-md border p-3 cursor-pointer transition " +
-                            (checked ? "border-blue-500 bg-blue-50" : "border-slate-200 hover:border-slate-300")
+                            "flex items-center gap-2 rounded-md border px-3 py-2 text-sm cursor-pointer transition " +
+                            (checked
+                              ? "border-blue-500 bg-blue-50"
+                              : "border-slate-200 hover:border-slate-300")
                           }
                         >
                           <input
-                            type="radio"
-                            name="selected_address"
-                            className="mt-1"
+                            type="checkbox"
                             checked={checked}
-                            onChange={() => setSelectedAddressId(a.id)}
+                            onChange={() =>
+                              setInvoiceGateways(prev =>
+                                prev.includes(name)
+                                  ? prev.filter(n => n !== name)
+                                  : [...prev, name]
+                              )
+                            }
+                            className="h-4 w-4 rounded border-slate-300"
                           />
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-sm">{a.label || "Address"}</span>
-                              {a.is_default && <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">Default</span>}
-                            </div>
-                            <div className="text-xs text-slate-500 mt-0.5">{line1 || "—"}</div>
-                          </div>
+                          <span className="capitalize font-medium">{name}</span>
                         </label>
                       )
                     })}
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Gateway selector: only show when there are gateways available AND a client is chosen */}
-          {selectedClientId && invoiceGateways.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Payment Gateways</CardTitle>
-                <CardDescription>Select the gateways the client can use to pay this invoice.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-4">
-                  {invoiceGateways.map(name => (
-                    <label key={name} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={invoiceGateways.includes(name)}
-                        onChange={() => setInvoiceGateways(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name])}
-                        className="h-4 w-4 rounded border-slate-300"
-                      />
-                      <span className="capitalize">{name}</span>
-                    </label>
-                  ))}
-                </div>
-                <p className="text-xs text-slate-500 mt-2">
-                  Untick a gateway to hide it on the public payment page for this invoice.
-                </p>
-              </CardContent>
-            </Card>
-          )}
-          <Card>
-            <CardHeader><CardTitle>Invoice Details</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <Label>Invoice Number *</Label>
-                <div className="flex gap-2">
-                  <Input {...register("invoice_number")} placeholder="INV-2026-0001" />
-                  <Button type="button" variant="outline" size="icon" onClick={refreshInvoiceNumber} title="Auto-generate">
-                    <RefreshCw className="h-4 w-4" />
-                  </Button>
-                </div>
-                {errors.invoice_number && <p className="text-xs text-red-500 mt-1">{errors.invoice_number.message}</p>}
-              </div>
-              <div>
-                <Label>Status</Label>
-                <select {...register("status")} className="mt-1 w-full h-10 rounded-md border border-slate-200 bg-white px-3 text-sm">
-                  <option value="Draft">Draft</option>
-                  <option value="Unpaid">Unpaid (Send to client)</option>
-                </select>
-              </div>
-              <div>
-                <Label>Due Date</Label>
-                <Input type="date" {...register("due_date")} />
-              </div>
-              <div>
-                <Label>Tax Rate (%)</Label>
-                <Input type="number" step="0.01" min="0" max="100" {...register("tax_rate")} placeholder="0" />
-                <p className="text-xs text-slate-500 mt-1">Applied to invoice subtotal</p>
-              </div>
+                  <p className="text-xs text-slate-500 mt-2">
+                    Untick a gateway to hide it on the public payment page for this invoice.
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
-
-        <BillingItems control={control} setValue={setValue} watch={watch} services={services} />
 
         <Card className="mt-6">
           <CardHeader><CardTitle>Summary</CardTitle></CardHeader>
