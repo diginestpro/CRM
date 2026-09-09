@@ -107,8 +107,8 @@ export async function createPaymentSession(invoiceId: string, gateway: "stripe" 
       ],
       mode: "payment",
       customer_email: clientEmail,
-      success_url: `${returnUrl || appUrl + "/invoices/" + invoiceId}?success=true`,
-      cancel_url: `${returnUrl || appUrl + "/invoices/" + invoiceId}?canceled=true`,
+      success_url: `${returnUrl || appUrl + "/pay/" + invoiceId}?success=true`,
+      cancel_url: `${returnUrl || appUrl + "/pay/" + invoiceId}?canceled=true`,
       metadata: { invoice_id: invoiceId },
     })
     return { url: session.url }
@@ -116,7 +116,12 @@ export async function createPaymentSession(invoiceId: string, gateway: "stripe" 
 
   if (gateway === "paypal") {
     const token = await getPayPalAccessToken()
-    const response = await fetch("https://api-m.sandbox.paypal.com/v2/checkout/orders", {
+    const gw = await getPaymentGateway("paypal")
+    if (!gw) throw new Error("PayPal is not active.")
+    const mode = gw.config?.mode || "sandbox"
+    const baseUrl = mode === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com"
+
+    const response = await fetch(`${baseUrl}/v2/checkout/orders`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -132,8 +137,8 @@ export async function createPaymentSession(invoiceId: string, gateway: "stripe" 
           },
         ],
         application_context: {
-          return_url: `${appUrl}/invoices/${invoiceId}?success=true`,
-          cancel_url: `${returnUrl || appUrl + "/invoices/" + invoiceId}?canceled=true`,
+          return_url: `${returnUrl || appUrl + "/pay/" + invoiceId}?success=true`,
+          cancel_url: `${returnUrl || appUrl + "/pay/" + invoiceId}?canceled=true`,
         },
       }),
     })
