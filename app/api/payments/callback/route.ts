@@ -29,6 +29,19 @@ async function markInvoicePaid(req: Request, body: string) {
   let orderId = url.searchParams.get("order_id") || url.searchParams.get("invoice_id") || ""
   let amount: number | null = null
   let gateway = "SafePay"
+  const supabase = getServiceClient()
+
+  if (!orderId) {
+    const tracker = url.searchParams.get("tracker")
+    if (tracker) {
+      const { data: txn } = await supabase
+        .from("payment_transactions")
+        .select("invoice_id")
+        .eq("gateway_transaction_id", tracker)
+        .maybeSingle()
+      orderId = txn?.invoice_id || ""
+    }
+  }
 
   if (body) {
     try {
@@ -37,7 +50,9 @@ async function markInvoicePaid(req: Request, body: string) {
         gateway = "PayPal"
         orderId = orderId || p.resource.purchase_units[0]?.custom_id || ""
         const paypalAmt = p.resource.purchase_units[0]?.amount?.value
-        if (paypalAmt) amount = parseFloat(paypalAmt)
+        if (paypalAmt) {
+          amount = parseFloat(paypalAmt)
+        }
       } else {
         const inner = p.data || {}
         orderId = orderId
@@ -47,23 +62,27 @@ async function markInvoicePaid(req: Request, body: string) {
           || p?.order_id
           || ""
         const rawAmt = inner?.amount ?? p?.amount
-        if (typeof rawAmt === "number") amount = rawAmt / 100
-        else if (typeof rawAmt === "string") amount = parseFloat(rawAmt) / 100
+        if (typeof rawAmt === "number") {
+          amount = rawAmt / 100
+        } else if (typeof rawAmt === "string") {
+          amount = parseFloat(rawAmt) / 100
+        }
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      // ignore
+    }
   }
 
   if (!orderId) {
     return { error: "order_id not found" }
   }
 
-  const supabase = getServiceClient()
-
   const { data: invoice, error: invErr } = await supabase
     .from("invoices")
     .select("id, total_amount, amount_paid, status, allows_partial_payments, min_payment")
     .eq("id", orderId)
     .maybeSingle()
+
   if (invErr) return { error: invErr.message }
   if (!invoice) return { error: `Invoice ${orderId} not found` }
 
@@ -90,36 +109,13 @@ async function markInvoicePaid(req: Request, body: string) {
     return { success: true, duplicate: true, invoice_id: orderId }
   }
 
-  // Resolve the actual amount that was paid.
-  const proposed = amount ?? Number(txn?.amount ?? invoice.total_amount ?? 0)
-
-  // Enforce per-invoice partial-payment rules server-side so a
-  // malicious client cannot bypass the UI guard.
-  const totalAmount = Number(invoice.total_amount || 0)
-  const priorPaid = Number(invoice.amount_paid || 0)
-  const remaining = Math.max(0, totalAmount - priorPaid)
-  const partialAllowed = invoice.allows_partial_payments === true
-  const minPay = invoice.min_payment != null ? Number(invoice.min_payment) : 0
-
-  if (!partialAllowed && Math.abs(proposed - remaining) > 0.01) {
-    return {
-      error: "This invoice must be paid in full.",
-      attempted: proposed,
-      required: remaining,
-    }
+  let finalAmount = amount
+  if (finalAmount === null && txn) {
+    finalAmount = Number(txn.amount || 0)
+  } else if (finalAmount === null) {
+    finalAmount = 0
   }
-  if (partialAllowed && minPay > 0 && proposed < minPay) {
-    return {
-      error: "Amount is below the minimum required for this invoice.",
-      attempted: proposed,
-      minimum: minPay,
-    }
-  }
-  // Never charge more than remaining (helps against rounding bugs).
-  const finalAmount = Math.min(proposed, remaining)
 
-  // Insert payment row. Unique partial index on (invoice_id, gateway) WHERE
-  // status=completed will reject duplicates at the DB level (Postgres 23505).
   const { data: payment, error: payErr } = await supabase.from("invoice_payments").insert({
     invoice_id: orderId,
     amount: finalAmount,
@@ -157,7 +153,7 @@ async function markInvoicePaid(req: Request, body: string) {
     .eq("invoice_id", orderId)
     .eq("status", "pending")
 
-  return { success: true, invoice_id: orderId, amount, totalPaid, status: newStatus }
+  return { success: true, invoice_id: orderId, amount: finalAmount, totalPaid, status: newStatus }
 }
 
 export async function POST(req: Request) {
@@ -185,7 +181,6 @@ export async function GET(req: Request) {
   if (tracker) params.set("tracker", tracker)
   const dest = `/pay/${orderId}?` + params.toString()
   const fullUrl = new URL(dest, url.origin).toString()
-  const safeUrl = JSON.stringify(fullUrl)
 
   // Simple HTML: meta refresh + manual button. Returns to the invoice page.
   const html = `<!doctype html><html><head><meta charset="utf-8">
@@ -207,5 +202,4 @@ a.btn{display:inline-block;margin-top:16px;padding:12px 24px;background:#2563eb;
     status: 200,
     headers: { "content-type": "text/html; charset=utf-8" },
   })
-
 }
