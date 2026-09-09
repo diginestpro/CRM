@@ -513,9 +513,64 @@ function InvoiceContent({ params }: { params: Promise<{ id: string }> }) {
                   </button>
                 </div>
                 <div>
-                  <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{invoice.status === "Partial" ? `Pay Amount (max ${formatMoney(remaining, currency)})` : "Amount"}</Label>
-                  <Input type="number" step="0.01" max={remaining} value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} className="mt-1.5 text-lg font-medium" />
-                  {invoice.status === "Partial" && <p className="text-xs text-slate-500 mt-1">Pay any amount up to the remaining balance</p>}
+                  <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    {(invoice as any).allows_partial_payments
+                      ? `Pay Amount (max ${formatMoney(remaining, currency)})`
+                      : "Amount Due"}
+                  </Label>
+                  {(() => {
+                    const partialAllowed = !!(invoice as any).allows_partial_payments
+                    const minPay = (invoice as any).min_payment != null
+                      ? Number((invoice as any).min_payment)
+                      : 0
+                    if (partialAllowed) {
+                      // Editable: enforce min and max client-side.
+                      return (
+                        <>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min={minPay || undefined}
+                            max={remaining}
+                            value={paymentAmount}
+                            onChange={(e) => {
+                              const raw = e.target.value
+                              const num = Number(raw)
+                              if (raw === "") { setPaymentAmount(""); return }
+                              if (!isFinite(num)) return
+                              const clamped = Math.min(Math.max(num, minPay || 0.01), remaining)
+                              setPaymentAmount(String(clamped))
+                            }}
+                            className="mt-1.5 text-lg font-medium"
+                          />
+                          {minPay > 0 && (
+                            <p className="text-xs text-slate-500 mt-1">
+                              Minimum payment: {formatMoney(minPay, currency)}.
+                            </p>
+                          )}
+                          <p className="text-xs text-slate-500 mt-1">
+                            You may pay any amount up to {formatMoney(remaining, currency)}.
+                          </p>
+                        </>
+                      )
+                    }
+                    // Locked: full remaining balance, no editing.
+                    return (
+                      <>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={paymentAmount}
+                          readOnly
+                          disabled
+                          className="mt-1.5 text-lg font-medium bg-slate-50 cursor-not-allowed"
+                        />
+                        <p className="text-xs text-slate-500 mt-1">
+                          This invoice must be paid in full.
+                        </p>
+                      </>
+                    )
+                  })()}
                 </div>
                 <div>
                   <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Payment Method</Label>

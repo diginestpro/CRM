@@ -44,6 +44,11 @@ export default function NewInvoicePage() {
   const [clientAddresses, setClientAddresses] = useState<{ id: string; label: string | null; street: string | null; city: string | null; state: string | null; postal_code: string | null; country: string | null; is_default: boolean }[]>([])
   const [selectedAddressId, setSelectedAddressId] = useState<string>("")
   const [activeGateways, setActiveGateways] = useState<{ gateway_name: string }[]>([])
+  // Partial-payment controls: when false, the client must pay the full
+  // remaining balance on /pay/[id]. When true, they can pay any amount
+  // >= minPayment (or any positive amount if minPayment is blank).
+  const [allowsPartial, setAllowsPartial] = useState(false)
+  const [minPayment, setMinPayment] = useState<string>("")
   const [invoiceGateways, setInvoiceGateways] = useState<string[]>([])
   // Per-invoice "From" office picker (USA / PK / UAE / ...). The choice
   // is independent per invoice - picking USA on invoice #1 will NOT
@@ -231,6 +236,8 @@ export default function NewInvoicePage() {
 
       const due_date = data.due_date || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
 
+      const minPaymentNum = minPayment.trim() === "" ? null : Number(minPayment)
+
       const { data: inv, error: invE } = await sb.from("invoices").insert({
         company_id,
         client_id: data.client_id,
@@ -244,6 +251,8 @@ export default function NewInvoicePage() {
         total_amount: totals.total,
         amount_paid: 0,
         notes: data.notes || null,
+        allows_partial_payments: allowsPartial,
+        min_payment: allowsPartial ? minPaymentNum : null,
       }).select().single()
       if (invE) throw invE
 
@@ -404,6 +413,40 @@ export default function NewInvoicePage() {
                 <Label>Tax Rate (%)</Label>
                 <Input type="number" step="0.01" min="0" max="100" {...register("tax_rate")} placeholder="0" />
                 <p className="text-xs text-slate-500 mt-1">Applied to invoice subtotal</p>
+              </div>
+              <div className="pt-3 border-t space-y-2">
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 mt-0.5 rounded border-slate-300"
+                    checked={allowsPartial}
+                    onChange={(e) => setAllowsPartial(e.target.checked)}
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-slate-900">Allow partial payments</div>
+                    <div className="text-xs text-slate-500">
+                      When off, the client must pay the full balance on the
+                      public pay page. When on, they may pay any amount up to
+                      the remaining balance.
+                    </div>
+                  </div>
+                </label>
+                {allowsPartial && (
+                  <div className="pl-6">
+                    <Label className="text-xs">Minimum payment (optional)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={minPayment}
+                      onChange={(e) => setMinPayment(e.target.value)}
+                      placeholder="No minimum"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">
+                      Leave blank to let the client pay any amount above 0.
+                    </p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

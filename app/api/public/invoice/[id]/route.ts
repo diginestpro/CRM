@@ -59,6 +59,10 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       .eq("invoice_id", id)
 
     invoice.allowed_methods = paymentMethods?.map(m => m.payment_method) || []
+    // Note: defaults are safe even on older invoices that haven't yet
+    // been saved with these columns (e.g. before migration 0009).
+    invoice.allows_partial_payments = invoice.allows_partial_payments ?? false
+    invoice.min_payment = invoice.min_payment ?? null
 
     if (invoice.client_id) {
       const { data: cli } = await supabase.from("clients").select("*").eq("id", invoice.client_id).maybeSingle()

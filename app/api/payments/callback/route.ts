@@ -61,7 +61,7 @@ async function markInvoicePaid(req: Request, body: string) {
 
   const { data: invoice, error: invErr } = await supabase
     .from("invoices")
-    .select("id, total_amount, amount_paid, status")
+    .select("id, total_amount, amount_paid, status, allows_partial_payments, min_payment")
     .eq("id", orderId)
     .maybeSingle()
   if (invErr) return { error: invErr.message }
@@ -90,7 +90,33 @@ async function markInvoicePaid(req: Request, body: string) {
     return { success: true, duplicate: true, invoice_id: orderId }
   }
 
-  const finalAmount = amount ?? Number(txn?.amount ?? invoice.total_amount ?? 0)
+  // Resolve the actual amount that was paid.
+  const proposed = amount ?? Number(txn?.amount ?? invoice.total_amount ?? 0)
+
+  // Enforce per-invoice partial-payment rules server-side so a
+  // malicious client cannot bypass the UI guard.
+  const totalAmount = Number(invoice.total_amount || 0)
+  const priorPaid = Number(invoice.amount_paid || 0)
+  const remaining = Math.max(0, totalAmount - priorPaid)
+  const partialAllowed = invoice.allows_partial_payments === true
+  const minPay = invoice.min_payment != null ? Number(invoice.min_payment) : 0
+
+  if (!partialAllowed && Math.abs(proposed - remaining) > 0.01) {
+    return {
+      error: "This invoice must be paid in full.",
+      attempted: proposed,
+      required: remaining,
+    }
+  }
+  if (partialAllowed && minPay > 0 && proposed < minPay) {
+    return {
+      error: "Amount is below the minimum required for this invoice.",
+      attempted: proposed,
+      minimum: minPay,
+    }
+  }
+  // Never charge more than remaining (helps against rounding bugs).
+  const finalAmount = Math.min(proposed, remaining)
 
   // Insert payment row. Unique partial index on (invoice_id, gateway) WHERE
   // status=completed will reject duplicates at the DB level (Postgres 23505).

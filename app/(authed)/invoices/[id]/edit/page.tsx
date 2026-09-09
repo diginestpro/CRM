@@ -37,6 +37,9 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
   const [services, setServices] = useState<{ id: string; name: string; base_price: number }[]>([])
   const [companyOffices, setCompanyOffices] = useState<any[]>([])
   const [selectedCompanyAddressId, setSelectedCompanyAddressId] = useState<string>("")
+  // Partial-payment controls (mirror of /invoices/new).
+  const [allowsPartial, setAllowsPartial] = useState(false)
+  const [minPayment, setMinPayment] = useState<string>("")
 
   const { register, control, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -64,6 +67,8 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
           due_date: iRes.data.due_date, items: items.length > 0 ? items : [{ service_id: "", quantity: 1, unit_price: 0 }],
         })
         setSelectedCompanyAddressId(iRes.data.company_address_id || "")
+        setAllowsPartial(!!iRes.data.allows_partial_payments)
+        setMinPayment(iRes.data.min_payment != null ? String(iRes.data.min_payment) : "")
       }
     }
     loadData()
@@ -77,6 +82,8 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
       const sb = createClientBrowser()
       const updatePayload: any = {
         client_id: v.client_id, invoice_number: v.invoice_number, status: v.status, due_date: v.due_date, total_amount: total, subtotal: total,
+        allows_partial_payments: allowsPartial,
+        min_payment: allowsPartial && minPayment.trim() !== "" ? Number(minPayment) : null,
       }
       if (selectedCompanyAddressId) {
         updatePayload.company_address_id = selectedCompanyAddressId
@@ -128,6 +135,35 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
             <select {...register("status")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
               <option value="Draft">Draft</option><option value="Sent">Sent</option><option value="Paid">Paid</option><option value="Overdue">Overdue</option>
             </select>
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                className="h-4 w-4 mt-0.5 rounded border-slate-300"
+                checked={allowsPartial}
+                onChange={(e) => setAllowsPartial(e.target.checked)}
+              />
+              <div>
+                <div className="text-sm font-medium">Allow partial payments</div>
+                <div className="text-xs text-slate-500">
+                  When off, the client must pay the full balance on the public pay page.
+                </div>
+              </div>
+            </label>
+            {allowsPartial && (
+              <div>
+                <Label className="text-xs">Minimum payment (optional)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={minPayment}
+                  onChange={(e) => setMinPayment(e.target.value)}
+                  placeholder="No minimum"
+                />
+              </div>
+            )}
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label>From Office</Label>
