@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer"
 import { createClientAdmin } from "./supabase/client"
 import { getAppSettings } from "./payment-gateways"
+import { loadFromBlock, resolveFromBlock } from "./company-address"
 
 interface CompanyBranding {
   name: string
@@ -42,6 +43,10 @@ interface InvoiceLite {
   notes?: string | null
   currency_code?: string
   selected_address_id?: string | null
+  // Multi-office support: which company office (USA / PK / UAE / ...)
+  // should appear in the "From" block of THIS invoice?
+  company_id?: string | null
+  company_address_id?: string | null
 }
 
 async function getSmtpSettings(companyId: string): Promise<SmtpSettings | null> {
@@ -89,13 +94,21 @@ export function formatMoney(amount: number, currency: string = "USD") {
   return `${symbol} ${Number(amount || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-function buildEmailWrapper(company: CompanyBranding, content: string) {
+function buildEmailWrapper(company: CompanyBranding, content: string, opts?: { fromBlock?: ReturnType<typeof resolveFromBlock> }) {
   const brandColor = company.brand_color || "#2563eb"
   const logo = company.logo_url
     ? `<img src="${company.logo_url}" alt="${company.name}" style="max-height: 60px; max-width: 200px;" />`
     : `<div style="display:inline-block;width:50px;height:50px;background:${brandColor};border-radius:10px;color:white;font-weight:bold;font-size:24px;line-height:50px;text-align:center;">${company.name.charAt(0).toUpperCase()}</div>`
 
-  const address = [company.address, company.city, company.state, company.zip, company.country].filter(Boolean).join(", ")
+  // Prefer the explicitly resolved "from_block" (chosen office address).
+  // Fall back to the legacy companies.address columns for any caller that
+  // hasn't migrated yet.
+  const fromBlock = opts?.fromBlock || resolveFromBlock({ company: company as any, address: null })
+  const addressHtml = fromBlock.address_html
+  const contactLine = [
+    fromBlock.email ? `<a href="mailto:${fromBlock.email}" style="color:#64748b;text-decoration:none;">${fromBlock.email}</a>` : "",
+    fromBlock.phone ? `<span>${fromBlock.phone}</span>` : "",
+  ].filter(Boolean).join(" &nbsp;·&nbsp; ")
 
   return `
 <!DOCTYPE html>
@@ -107,11 +120,13 @@ function buildEmailWrapper(company: CompanyBranding, content: string) {
       <table style="width:100%;"><tr>
         <td style="vertical-align:middle;">${logo}</td>
         <td style="vertical-align:middle;text-align:right;">
-          <div style="font-size:18px;font-weight:700;color:${brandColor};">${company.name}</div>
+          <div style="font-size:16px;font-weight:700;color:${brandColor};">${company.name}</div>
           ${company.tagline ? `<div style="font-size:12px;color:#64748b;font-style:italic;">${company.tagline}</div>` : ""}
+          ${fromBlock.address_name ? `<div style="font-size:11px;color:#2563eb;font-weight:600;margin-top:4px;">${fromBlock.address_name}</div>` : ""}
+          ${addressHtml ? `<div style="font-size:12px;color:#64748b;line-height:1.5;margin-top:4px;">${addressHtml}</div>` : ""}
+          ${contactLine ? `<div style="font-size:12px;color:#64748b;margin-top:4px;">${contactLine}</div>` : ""}
         </td>
       </tr></table>
-      ${address ? `<div style="font-size:11px;color:#64748b;margin-top:8px;">${address}</div>` : ""}
     </div>
     <div style="padding:32px;">${content}</div>
     <div style="padding:16px 32px;background:#f1f5f9;border-top:1px solid #e2e8f0;font-size:11px;color:#64748b;text-align:center;">
@@ -336,7 +351,12 @@ export async function sendInvoiceEmail(companyId: string, invoiceId: string): Pr
     <p style="font-size:12px;color:#64748b;margin-top:24px;">If you have any questions, please reply to this email.</p>
   `
 
-  const html = buildEmailWrapper(company, content)
+  // Resolve the chosen office address (USA / PK / UAE / ...) so the email
+  // shows the picked office in the From block, not always the legacy
+  // companies.address columns.
+  const fromBlock = await loadFromBlock(supabase, invoice)
+
+  const html = buildEmailWrapper(company, content, { fromBlock })
   const text = `Invoice ${invoice.invoice_number}
 Amount: ${formatMoney(invoice.total_amount, currency)}
 Due: ${invoice.due_date || "Upon receipt"}
@@ -376,7 +396,11 @@ export async function sendReceiptEmail(companyId: string, invoiceId: string): Pr
       <a href="${appUrl}/pay/${invoice.id}/receipt" style="display:inline-block;background:#10b981;color:white;padding:12px 32px;text-decoration:none;border-radius:6px;font-weight:600;">View Receipt</a>
     </div>
   `
-  const html = buildEmailWrapper(company, content)
+  // Resolve the chosen office address (so receipt uses the same From
+  // block the client saw when they paid).
+  const fromBlock = await loadFromBlock(supabase, invoice)
+
+  const html = buildEmailWrapper(company, content, { fromBlock })
   return sendEmail(companyId, client.email, `Payment received - ${invoice.invoice_number}`, html,
     `Payment of ${formatMoney(invoice.amount_paid, currency)} received for invoice ${invoice.invoice_number}.`,
     { relatedType: "payment", relatedId: invoice.id })
@@ -408,7 +432,10 @@ export async function sendOverdueReminder(companyId: string, invoiceId: string):
       <a href="${appUrl}/pay/${invoice.id}" style="display:inline-block;background:#ef4444;color:white;padding:12px 32px;text-decoration:none;border-radius:6px;font-weight:600;">Pay Now</a>
     </div>
   `
-  const html = buildEmailWrapper(company, content)
+  // Resolve the chosen office address.
+  const fromBlock = await loadFromBlock(supabase, invoice)
+
+  const html = buildEmailWrapper(company, content, { fromBlock })
   return sendEmail(companyId, client.email, `Overdue: Invoice ${invoice.invoice_number}`, html,
     `Invoice ${invoice.invoice_number} is overdue. Outstanding: ${formatMoney(balance, currency)}.`,
     { relatedType: "overdue", relatedId: invoice.id })

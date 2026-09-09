@@ -34,6 +34,8 @@ export default function EditQuotationPage({ params }: { params: Promise<{ id: st
   const [isLoading, setIsLoading] = useState(false)
   const [clients, setClients] = useState<{ id: string; full_name: string }[]>([])
   const [services, setServices] = useState<{ id: string; name: string; base_price: number }[]>([])
+  const [companyOffices, setCompanyOffices] = useState<any[]>([])
+  const [selectedCompanyAddressId, setSelectedCompanyAddressId] = useState<string>("")
 
   const { register, control, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -42,13 +44,15 @@ export default function EditQuotationPage({ params }: { params: Promise<{ id: st
   useEffect(() => {
     async function loadData() {
       const sb = createClientBrowser()
-      const [cRes, sRes, qRes] = await Promise.all([
+      const [cRes, sRes, qRes, oRes] = await Promise.all([
         sb.from("clients").select("id, full_name"),
         sb.from("services").select("id, name, base_price"),
-        sb.from("quotations").select("*, quotation_items(*)").eq("id", id).single()
+        sb.from("quotations").select("*, quotation_items(*)").eq("id", id).single(),
+        sb.from("company_addresses").select("id, address_name, street, city, state, postal_code, country, is_default").order("is_default", { ascending: false }).order("created_at", { ascending: true }),
       ])
       setClients(cRes.data || [])
       setServices(sRes.data || [])
+      setCompanyOffices((oRes.data as any[]) || [])
       if (qRes.data) {
         const items = (qRes.data.quotation_items || []).map((i: any) => ({
           service_id: i.service_id, quantity: i.quantity, unit_price: i.unit_price, description: i.description,
@@ -57,6 +61,7 @@ export default function EditQuotationPage({ params }: { params: Promise<{ id: st
           client_id: qRes.data.client_id, quotation_number: qRes.data.quotation_number, status: qRes.data.status,
           items: items.length > 0 ? items : [{ service_id: "", quantity: 1, unit_price: 0 }],
         })
+        setSelectedCompanyAddressId(qRes.data.company_address_id || "")
       }
     }
     loadData()
@@ -68,9 +73,13 @@ export default function EditQuotationPage({ params }: { params: Promise<{ id: st
     setIsLoading(true)
     try {
       const sb = createClientBrowser()
-      const { error: qE } = await sb.from("quotations").update({
+      const updatePayload: any = {
         client_id: v.client_id, quotation_number: v.quotation_number, status: v.status, total_amount: total,
-      }).eq("id", id)
+      }
+      if (selectedCompanyAddressId) {
+        updatePayload.company_address_id = selectedCompanyAddressId
+      }
+      const { error: qE } = await sb.from("quotations").update(updatePayload).eq("id", id)
       if (qE) throw qE
       await sb.from("quotation_items").delete().eq("quotation_id", id)
       const { error: iE } = await sb.from("quotation_items").insert(v.items.map(i => ({
@@ -113,6 +122,24 @@ export default function EditQuotationPage({ params }: { params: Promise<{ id: st
             <select {...register("status")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
               <option value="Draft">Draft</option><option value="Sent">Sent</option><option value="Accepted">Accepted</option><option value="Rejected">Rejected</option>
             </select>
+          </div>
+          <div className="space-y-2 md:col-span-3">
+            <Label>From Office</Label>
+            <select
+              value={selectedCompanyAddressId}
+              onChange={(e) => setSelectedCompanyAddressId(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="">Company default</option>
+              {companyOffices.map((o: any) => (
+                <option key={o.id} value={o.id}>
+                  {o.address_name || "Office"}{o.country ? ` - ${o.country}` : ""}{o.is_default ? " (default)" : ""}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-500">
+              This office is shown in the "From" block of this quotation, its PDF, and any email sent.
+            </p>
           </div>
         </div>
         <BillingItems control={control as any} setValue={setValue as any} watch={watch as any} services={services} />

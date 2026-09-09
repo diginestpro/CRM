@@ -35,6 +35,8 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
   const [isLoading, setIsLoading] = useState(false)
   const [clients, setClients] = useState<{ id: string; full_name: string }[]>([])
   const [services, setServices] = useState<{ id: string; name: string; base_price: number }[]>([])
+  const [companyOffices, setCompanyOffices] = useState<any[]>([])
+  const [selectedCompanyAddressId, setSelectedCompanyAddressId] = useState<string>("")
 
   const { register, control, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -43,13 +45,16 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
   useEffect(() => {
     async function loadData() {
       const sb = createClientBrowser()
-      const [cRes, sRes, iRes] = await Promise.all([
+      const [cRes, sRes, iRes, oRes] = await Promise.all([
         sb.from("clients").select("id, full_name"),
         sb.from("services").select("id, name, base_price"),
-        sb.from("invoices").select("*, invoice_items(*)").eq("id", id).single()
+        sb.from("invoices").select("*, invoice_items(*)").eq("id", id).single(),
+        sb.from("company_addresses").select("id, address_name, street, city, state, postal_code, country, is_default").order("is_default", { ascending: false }).order("created_at", { ascending: true }),
       ])
       setClients(cRes.data || [])
       setServices(sRes.data || [])
+      const offices = (oRes.data as any[]) || []
+      setCompanyOffices(offices)
       if (iRes.data) {
         const items = (iRes.data.invoice_items || []).map((i: any) => ({
           service_id: i.service_id, quantity: i.quantity, unit_price: i.unit_price, description: i.description,
@@ -58,6 +63,7 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
           client_id: iRes.data.client_id, invoice_number: iRes.data.invoice_number, status: iRes.data.status,
           due_date: iRes.data.due_date, items: items.length > 0 ? items : [{ service_id: "", quantity: 1, unit_price: 0 }],
         })
+        setSelectedCompanyAddressId(iRes.data.company_address_id || "")
       }
     }
     loadData()
@@ -69,9 +75,13 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
     setIsLoading(true)
     try {
       const sb = createClientBrowser()
-      const { error: iE } = await sb.from("invoices").update({
+      const updatePayload: any = {
         client_id: v.client_id, invoice_number: v.invoice_number, status: v.status, due_date: v.due_date, total_amount: total, subtotal: total,
-      }).eq("id", id)
+      }
+      if (selectedCompanyAddressId) {
+        updatePayload.company_address_id = selectedCompanyAddressId
+      }
+      const { error: iE } = await sb.from("invoices").update(updatePayload).eq("id", id)
       if (iE) throw iE
       await sb.from("invoice_items").delete().eq("invoice_id", id)
       const { error: itemE } = await sb.from("invoice_items").insert(v.items.map(i => ({
@@ -118,6 +128,24 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
             <select {...register("status")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
               <option value="Draft">Draft</option><option value="Sent">Sent</option><option value="Paid">Paid</option><option value="Overdue">Overdue</option>
             </select>
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>From Office</Label>
+            <select
+              value={selectedCompanyAddressId}
+              onChange={(e) => setSelectedCompanyAddressId(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="">Company default</option>
+              {companyOffices.map((o: any) => (
+                <option key={o.id} value={o.id}>
+                  {o.address_name || "Office"}{o.country ? ` - ${o.country}` : ""}{o.is_default ? " (default)" : ""}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-500">
+              This office is shown in the &quot;From&quot; block on the invoice, PDF, and email.
+            </p>
           </div>
         </div>
         <BillingItems control={control as any} setValue={setValue as any} watch={watch as any} services={services} />

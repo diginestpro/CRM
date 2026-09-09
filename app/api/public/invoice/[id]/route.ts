@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { loadFromBlock } from "@/lib/company-address"
 
 // Rate limiting per IP
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
@@ -67,6 +68,10 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       const { data: comp } = await supabase.from("companies").select("*").eq("id", invoice.company_id).maybeSingle()
       invoice.companies = comp
     }
+
+    // Resolve the chosen office address (USA / PK / UAE / ...) for the
+    // "From" block shown on /pay and the receipt page.
+    invoice.from_block = await loadFromBlock(supabase, invoice)
 
     return NextResponse.json({ invoice })
   } catch (e: any) {

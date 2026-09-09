@@ -284,17 +284,34 @@ function InvoiceContent({ params }: { params: Promise<{ id: string }> }) {
                   {companyTagline && <p className="text-xs text-slate-500 mt-0.5 italic">{companyTagline}</p>}
                   {company?.email && <p className="text-sm text-slate-500 flex items-center gap-1 mt-0.5"><Mail className="h-3 w-3" /> {company.email}</p>}
                   {company?.phone && <p className="text-sm text-slate-500 flex items-center gap-1 mt-0.5"><Phone className="h-3 w-3" /> {company.phone}</p>}
-                  {(company?.address || company?.city) && (
-                    <p className="text-sm text-slate-500 flex items-start gap-1 mt-0.5">
+                  {/* Office address (From block). Prefer invoice.from_block (chosen
+                      office); fall back to the legacy companies row. */}
+                  {((invoice as any)?.from_block?.address_lines?.length || company?.address || company?.city || company?.country) && (
+                    <div className="text-sm text-slate-500 flex items-start gap-1 mt-0.5">
                       <MapPin className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                      <span>
-                        {company?.address}
-                        {company?.city && `, ${company.city}`}
-                        {company?.state && `, ${company.state}`}
-                        {company?.zip && ` ${company.zip}`}
-                        {company?.country && `, ${company.country}`}
-                      </span>
-                    </p>
+                      <div>
+                        {((invoice as any)?.from_block?.address_name) && (
+                          <div className="text-xs font-semibold text-blue-600">
+                            {(invoice as any).from_block.address_name}
+                          </div>
+                        )}
+                        {((invoice as any)?.from_block?.address_lines?.length ?? 0) > 0 ? (
+                          (invoice as any).from_block.address_lines.map((line: string, idx: number) => (
+                            <div key={idx}>{line}</div>
+                          ))
+                        ) : (
+                          <>
+                            {company?.address && <div>{company.address}</div>}
+                            {(company?.city || company?.state || company?.zip) && (
+                              <div>
+                                {[company.city, company.state, company.zip].filter(Boolean).join(", ")}
+                              </div>
+                            )}
+                            {company?.country && <div>{company.country}</div>}
+                          </>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>

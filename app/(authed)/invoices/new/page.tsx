@@ -45,6 +45,11 @@ export default function NewInvoicePage() {
   const [selectedAddressId, setSelectedAddressId] = useState<string>("")
   const [activeGateways, setActiveGateways] = useState<{ gateway_name: string }[]>([])
   const [invoiceGateways, setInvoiceGateways] = useState<string[]>([])
+  // Per-invoice "From" office picker (USA / PK / UAE / ...). The choice
+  // is independent per invoice - picking USA on invoice #1 will NOT
+  // affect invoice #2.
+  const [companyOffices, setCompanyOffices] = useState<any[]>([])
+  const [selectedCompanyAddressId, setSelectedCompanyAddressId] = useState<string>("")
 
   const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema) as any,
@@ -96,6 +101,22 @@ export default function NewInvoicePage() {
         const res = await fetch("/api/settings/payments").then(r => r.json()).catch(() => null)
         const list: any[] = res?.gateways || []
         setActiveGateways(list.filter((g: any) => g.is_active).map((g: any) => ({ gateway_name: g.gateway_name })))
+      } catch { /* ignore */ }
+
+      // Load the company's office addresses (USA / PK / UAE / ...) so the
+      // user can pick which office this invoice is billed FROM. The choice
+      // is per-invoice.
+      try {
+        const sb = createClientBrowser()
+        const { data: offices } = await sb
+          .from("company_addresses")
+          .select("id, address_name, street, city, state, postal_code, country, is_default")
+          .order("is_default", { ascending: false })
+          .order("created_at", { ascending: true })
+        const list = (offices as any[]) || []
+        setCompanyOffices(list)
+        const def = list.find(o => o.is_default) || list[0]
+        setSelectedCompanyAddressId(def?.id || "")
       } catch { /* ignore */ }
     }
     loadAll()
@@ -229,9 +250,19 @@ export default function NewInvoicePage() {
       })))
       if (iE) throw iE
 
-      // Persist the selected address on the invoice row, if any.
+      // Persist the selected Bill-To address on the invoice row, if any.
       if (selectedAddressId) {
         await sb.from("invoices").update({ selected_address_id: selectedAddressId }).eq("id", inv.id)
+      }
+
+      // Persist the chosen From-office (company_address_id). If none was
+      // picked we fall back to the company's default office so the field
+      // is never null on new invoices.
+      const officeId =
+        selectedCompanyAddressId ||
+        (companyOffices.find(o => o.is_default)?.id || companyOffices[0]?.id || null)
+      if (officeId) {
+        await sb.from("invoices").update({ company_address_id: officeId }).eq("id", inv.id)
       }
 
       // Persist the chosen payment gateways for this invoice.
@@ -325,6 +356,61 @@ export default function NewInvoicePage() {
                   <Button type="button" onClick={handleCreateClient} disabled={creatingClient} size="sm">
                     {creatingClient ? <span>Creating...</span> : <><Plus className="h-3 w-3 mr-1" /> Create Client</>}
                   </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* From-office picker: shown unconditionally so the user always
+              picks the office this invoice is billed FROM. Independent
+              per-invoice - does NOT cascade to other invoices. */}
+          <Card>
+            <CardHeader>
+              <CardTitle>From Address</CardTitle>
+              <CardDescription>
+                Pick the office this invoice is billed from. The choice is
+                saved on this invoice only.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {companyOffices.length === 0 ? (
+                <div className="rounded-md border border-dashed border-slate-300 p-4 text-sm text-slate-500">
+                  No office addresses saved yet. Add them in{" "}
+                  <Link href="/settings/company" className="text-blue-600 underline">
+                    Settings &amp; Company
+                  </Link>
+                  .
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {companyOffices.map(o => {
+                    const line1 = [o.street, o.city, o.state, o.postal_code, o.country].filter(Boolean).join(", ")
+                    const checked = (selectedCompanyAddressId || "") === o.id
+                    return (
+                      <label
+                        key={o.id}
+                        className={
+                          "flex items-start gap-3 rounded-md border p-3 cursor-pointer transition " +
+                          (checked ? "border-blue-500 bg-blue-50" : "border-slate-200 hover:border-slate-300")
+                        }
+                      >
+                        <input
+                          type="radio"
+                          name="selected_company_address"
+                          className="mt-1"
+                          checked={checked}
+                          onChange={() => setSelectedCompanyAddressId(o.id)}
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm">{o.address_name || "Office"}</span>
+                            {o.is_default && <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">Default</span>}
+                          </div>
+                          <div className="text-xs text-slate-500 mt-0.5">{line1 || "-"}</div>
+                        </div>
+                      </label>
+                    )
+                  })}
                 </div>
               )}
             </CardContent>

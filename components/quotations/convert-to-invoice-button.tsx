@@ -16,13 +16,17 @@ export function ConvertToInvoiceButton({ quotation }: { quotation: any }) {
     try {
       const sb = createClientBrowser()
       
-      // 1. Create Invoice
+      // 1. Create Invoice (carry the chosen From-office and other key
+      //    fields from the quotation so the conversion preserves the
+      //    user's selection).
       const { data: invoice, error: invE } = await sb.from('invoices').insert({
         client_id: quotation.client_id,
         invoice_number: `INV-${quotation.quote_number.replace('QT-', '')}`,
         status: 'Draft',
         total_amount: quotation.total_amount,
         company_id: quotation.company_id,
+        company_address_id: quotation.company_address_id || null,
+        selected_address_id: quotation.selected_address_id || null,
       }).select().single()
 
       if (invE) throw invE

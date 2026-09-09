@@ -110,8 +110,19 @@ function ReceiptContent() {
                   <div className="flex justify-between items-start">
                     <div>
                       <h2 className="text-xl font-bold" style={{ color: brandColor }}>{company?.name || "Receipt"}</h2>
-                      {company?.email && <p className="text-sm text-slate-500">{company.email}</p>}
-                      {company?.phone && <p className="text-sm text-slate-500">{company.phone}</p>}
+                      {(receipt as any)?.from_block?.address_name && (
+                        <p className="text-xs font-semibold text-blue-600 mt-0.5">{(receipt as any).from_block.address_name}</p>
+                      )}
+                      {((receipt as any)?.from_block?.address_lines?.length ?? 0) > 0 ? (
+                        (receipt as any).from_block.address_lines.map((line: string, idx: number) => (
+                          <p key={idx} className="text-sm text-slate-500">{line}</p>
+                        ))
+                      ) : (
+                        <>
+                          {company?.email && <p className="text-sm text-slate-500">{company.email}</p>}
+                          {company?.phone && <p className="text-sm text-slate-500">{company.phone}</p>}
+                        </>
+                      )}
                     </div>
                     <div className="text-right">
                       <p className="text-xs uppercase tracking-wider text-slate-400">Receipt</p>

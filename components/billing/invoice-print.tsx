@@ -16,9 +16,38 @@ export function InvoicePrintLayout({ invoice }: InvoicePrintProps) {
         </div>
         <div className="text-right space-y-1">
           <h3 className="font-bold text-lg">From:</h3>
-          <p>My Company Name</p>
-          <p>company@example.com</p>
-          <p>123 Business Street, City, State</p>
+          {/* Use the resolved from_block (server-loaded) when present — that
+              gives us the user's chosen office address (USA / PK / UAE / ...)
+              for THIS invoice. Falls back to the legacy companies.address
+              columns if from_block is unavailable (older callers). */}
+          {invoice.from_block ? (
+            <>
+              <p className="font-semibold">{invoice.from_block.name}</p>
+              {invoice.from_block.address_name && (
+                <p className="text-xs text-slate-500 italic">{invoice.from_block.address_name}</p>
+              )}
+              {invoice.from_block.address_lines.map((line: string, idx: number) => (
+                <p key={idx}>{line}</p>
+              ))}
+              {invoice.from_block.email && <p className="text-slate-600">{invoice.from_block.email}</p>}
+              {invoice.from_block.phone && <p className="text-slate-600">{invoice.from_block.phone}</p>}
+            </>
+          ) : (
+            <>
+              {invoice.companies?.name && <p className="font-semibold">{invoice.companies.name}</p>}
+              {invoice.companies?.address && <p>{invoice.companies.address}</p>}
+              {(invoice.companies?.city || invoice.companies?.state || invoice.companies?.zip) && (
+                <p>
+                  {[invoice.companies?.city, invoice.companies?.state, invoice.companies?.zip]
+                    .filter(Boolean)
+                    .join(", ")}
+                </p>
+              )}
+              {invoice.companies?.country && <p>{invoice.companies.country}</p>}
+              {invoice.companies?.email && <p className="text-slate-600">{invoice.companies.email}</p>}
+              {invoice.companies?.phone && <p className="text-slate-600">{invoice.companies.phone}</p>}
+            </>
+          )}
         </div>
       </div>
 

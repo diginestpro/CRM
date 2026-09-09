@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ArrowLeft, FileText, CheckCircle, Clock, AlertCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { InvoiceActions } from "@/components/billing/invoice-actions"
+import { loadFromBlock } from "@/lib/company-address"
 
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -53,6 +54,38 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
             services: serviceMap[item.service_id] || null
           }))
         }
+      }
+
+      // Load the company (From) info so the detail page header shows it too.
+      if (invoice.company_id) {
+        const { data: comp } = await supabase.from("companies").select("*").eq("id", invoice.company_id).maybeSingle()
+        invoice.companies = comp
+      }
+
+      // Resolve the chosen office address (USA / Pakistan / UAE / ...) so the
+      // "From" block on this invoice renders the picked office instead of
+      // always defaulting to the legacy companies.address columns.
+      invoice.from_block = await loadFromBlock(supabase, invoice)
+      // Also expose the raw company_address row in case a UI needs it.
+      if (invoice.company_address_id) {
+        const { data: ca } = await supabase
+          .from("company_addresses")
+          .select("*")
+          .eq("id", invoice.company_address_id)
+          .maybeSingle()
+        invoice.company_address = ca || null
+      }
+
+      // Load the full list of company offices so the picker on the edit
+      // page (and the read-only detail view) can show what's available.
+      if (invoice.company_id) {
+        const { data: offices } = await supabase
+          .from("company_addresses")
+          .select("*")
+          .eq("company_id", invoice.company_id)
+          .order("is_default", { ascending: false })
+          .order("created_at", { ascending: true })
+        invoice.company_offices = offices || []
       }
     }
   } catch (e) {
@@ -182,6 +215,37 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
                   </span>
                 </div>
               )}
+              <div className="pt-4 border-t">
+                <span className="text-slate-500 block mb-2">From</span>
+                {invoice.from_block ? (
+                  <div className="flex flex-col text-sm">
+                    <span className="font-bold">{invoice.from_block.name}</span>
+                    {invoice.from_block.address_name && (
+                      <span className="text-xs text-slate-500 italic">{invoice.from_block.address_name}</span>
+                    )}
+                    {invoice.from_block.address_lines.map((line: string, idx: number) => (
+                      <span key={idx} className="text-slate-600">{line}</span>
+                    ))}
+                    {invoice.from_block.email && <span className="text-slate-600">{invoice.from_block.email}</span>}
+                    {invoice.from_block.phone && <span className="text-slate-600">{invoice.from_block.phone}</span>}
+                  </div>
+                ) : invoice.companies ? (
+                  <div className="flex flex-col text-sm">
+                    <span className="font-bold">{invoice.companies.name}</span>
+                    {invoice.companies.address && <span className="text-slate-600">{invoice.companies.address}</span>}
+                    {(invoice.companies.city || invoice.companies.state || invoice.companies.zip) && (
+                      <span className="text-slate-600">
+                        {[invoice.companies.city, invoice.companies.state, invoice.companies.zip].filter(Boolean).join(", ")}
+                      </span>
+                    )}
+                    {invoice.companies.country && <span className="text-slate-600">{invoice.companies.country}</span>}
+                    {invoice.companies.email && <span className="text-slate-600">{invoice.companies.email}</span>}
+                    {invoice.companies.phone && <span className="text-slate-600">{invoice.companies.phone}</span>}
+                  </div>
+                ) : (
+                  <span className="text-slate-400 text-sm">No company info</span>
+                )}
+              </div>
               <div className="pt-4 border-t">
                 <span className="text-slate-500 block mb-2">Client</span>
                 {invoice.clients ? (

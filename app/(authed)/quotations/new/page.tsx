@@ -33,6 +33,8 @@ export default function NewQuotationPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [clients, setClients] = useState<{ id: string; full_name: string }[]>([])
   const [services, setServices] = useState<{ id: string; name: string; base_price: number }[]>([])
+  const [companyOffices, setCompanyOffices] = useState<any[]>([])
+  const [selectedCompanyAddressId, setSelectedCompanyAddressId] = useState<string>("")
 
   const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -42,10 +44,17 @@ export default function NewQuotationPage() {
   useEffect(() => {
     async function load() {
       const sb = createClientBrowser()
-      const { data: c } = await sb.from("clients").select("id, full_name")
-      const { data: s } = await sb.from("services").select("id, name, base_price")
-      setClients(c || [])
-      setServices(s || [])
+      const [cRes, sRes, oRes] = await Promise.all([
+        sb.from("clients").select("id, full_name"),
+        sb.from("services").select("id, name, base_price"),
+        sb.from("company_addresses").select("id, address_name, street, city, state, postal_code, country, is_default").order("is_default", { ascending: false }).order("created_at", { ascending: true }),
+      ])
+      setClients(cRes.data || [])
+      setServices(sRes.data || [])
+      const offices = (oRes.data as any[]) || []
+      setCompanyOffices(offices)
+      const def = offices.find(o => o.is_default) || offices[0]
+      setSelectedCompanyAddressId(def?.id || "")
     }
     load()
   }, [])
@@ -62,9 +71,14 @@ export default function NewQuotationPage() {
         router.push("/onboarding")
         return
       }
+      const officeId =
+        selectedCompanyAddressId ||
+        (companyOffices.find(o => o.is_default)?.id || companyOffices[0]?.id || null)
+
       const { data: q, error: qE } = await sb.from("quotations").insert({
         company_id, client_id: v.client_id, quotation_number: v.quotation_number, status: v.status,
         issue_date: new Date().toISOString().split("T")[0], total_amount: total,
+        company_address_id: officeId,
       }).select().single()
       if (qE) throw qE
       const { error: iE } = await sb.from("quotation_items").insert(v.items.map(i => ({
@@ -107,6 +121,48 @@ export default function NewQuotationPage() {
             <select {...register("status")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
               <option value="Draft">Draft</option><option value="Sent">Sent</option><option value="Accepted">Accepted</option><option value="Rejected">Rejected</option>
             </select>
+          </div>
+          <div className="space-y-2 md:col-span-3">
+            <Label>From Office</Label>
+            {companyOffices.length === 0 ? (
+              <p className="text-xs text-slate-500">
+                No offices saved. <Link href="/settings/company" className="text-blue-600 underline">Add them in Settings -&gt; Company</Link>.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                {companyOffices.map((o: any) => {
+                  const line1 = [o.street, o.city, o.state, o.postal_code, o.country].filter(Boolean).join(", ")
+                  const checked = (selectedCompanyAddressId || "") === o.id
+                  return (
+                    <label
+                      key={o.id}
+                      className={
+                        "flex items-start gap-2 rounded-md border p-2 cursor-pointer transition " +
+                        (checked ? "border-blue-500 bg-blue-50" : "border-slate-200 hover:border-slate-300")
+                      }
+                    >
+                      <input
+                        type="radio"
+                        name="selected_company_address"
+                        className="mt-1"
+                        checked={checked}
+                        onChange={() => setSelectedCompanyAddressId(o.id)}
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">{o.address_name || "Office"}</span>
+                          {o.is_default && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">Default</span>}
+                        </div>
+                        <div className="text-xs text-slate-500">{line1 || "-"}</div>
+                      </div>
+                    </label>
+                  )
+                })}
+              </div>
+            )}
+            <p className="text-xs text-slate-500">
+              The chosen office is shown in the "From" block of this quotation, its PDF, and any email sent. The choice is per-quotation.
+            </p>
           </div>
         </div>
         <BillingItems control={control as any} setValue={setValue as any} watch={watch as any} services={services} />
