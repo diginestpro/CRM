@@ -110,7 +110,7 @@ export function formatMoney(amount: number, currency: string = "USD") {
   return `${symbol} ${Number(amount || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-function buildEmailWrapper(company: CompanyBranding, content: string, opts?: { fromBlock?: ReturnType<typeof resolveFromBlock> }) {
+export function buildEmailWrapper(company: CompanyBranding, content: string, opts?: { fromBlock?: ReturnType<typeof resolveFromBlock> }) {
   const brandColor = company.brand_color || "#2563eb"
   const logo = company.logo_url
     ? `<img src="${company.logo_url}" alt="${company.name}" style="max-height: 60px; max-width: 200px;" />`
@@ -192,7 +192,7 @@ async function getAppUrl(companyId?: string): Promise<string> {
   return appUrl
 }
 
-async function sendEmail(companyId: string, to: string, subject: string, html: string, text: string, opts: { relatedType?: string; relatedId?: string } = {}): Promise<SendEmailResult> {
+export async function sendEmail(companyId: string, to: string, subject: string, html: string, text: string, opts: { relatedType?: string; relatedId?: string } = {}): Promise<SendEmailResult> {
   const smtp = await getSmtpSettings(companyId)
   if (!smtp || !smtp.host || !smtp.from_email) {
     return { ok: false, error: "SMTP not configured for this company" }

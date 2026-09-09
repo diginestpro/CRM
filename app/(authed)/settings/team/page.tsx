@@ -2,14 +2,13 @@
 
 import { useEffect, useState } from "react"
 import { createClientBrowser } from "@/lib/supabase/client"
-import { createClient } from "@supabase/supabase-js"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog"
 import { toast } from "sonner"
-import { Loader2, Mail, MoreVertical, UserPlus, Trash2 } from "lucide-react"
+import { Loader2, Mail, UserPlus, Trash2 } from "lucide-react"
 
 interface Member {
   id: string
@@ -25,7 +24,13 @@ export default function TeamSettingsPage() {
   const [isInviting, setIsInviting] = useState(false)
   const [showInviteDialog, setShowInviteDialog] = useState(false)
   const [inviteEmail, setInviteEmail] = useState("")
+  const [inviteFullName, setInviteFullName] = useState("")
   const [inviteRole, setInviteRole] = useState("user")
+  // Optional initial password. If empty we generate one server-side
+  // and the invitee sets their own via the recovery email.
+  const [invitePassword, setInvitePassword] = useState("")
+  const [inviteUseCustomPassword, setInviteUseCustomPassword] = useState(false)
+  const [lastInviteInfo, setLastInviteInfo] = useState<{ sentTempPassword?: string; recoveryEmailSent?: boolean; customEmailSent?: boolean; customEmailError?: string | null } | null>(null)
 
   useEffect(() => {
     loadMembers()
@@ -52,19 +57,44 @@ export default function TeamSettingsPage() {
       toast.error("Please enter a valid email")
       return
     }
+    if (inviteUseCustomPassword && invitePassword.length < 6) {
+      toast.error("Password must be at least 6 characters")
+      return
+    }
     setIsInviting(true)
     try {
       // Use service role on server to create user and add to company
       const res = await fetch("/api/settings/team/invite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
+        body: JSON.stringify({
+          email: inviteEmail,
+          full_name: inviteFullName.trim() || undefined,
+          role: inviteRole,
+          password: inviteUseCustomPassword ? invitePassword : undefined,
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Failed")
-      toast.success("Invitation sent!")
+      // Show a more informative toast depending on which emails went out.
+      const bits: string[] = []
+      if (data.customInviteEmailSent) bits.push("invite email sent")
+      if (data.recoveryEmailSent) bits.push("password-reset email sent")
+      if (data.customInviteEmailError) bits.push("invite email failed")
+      const tail = bits.length ? ` (${bits.join(", ")})` : ""
+      toast.success(`Invitation created${tail}.`)
+      setLastInviteInfo({
+        sentTempPassword: inviteUseCustomPassword ? invitePassword : undefined,
+        recoveryEmailSent: data.recoveryEmailSent,
+        customEmailSent: data.customInviteEmailSent,
+        customEmailError: data.customInviteEmailError,
+      })
+      // Reset the form but keep the dialog open so the admin can copy
+      // the temporary password if they generated one.
       setInviteEmail("")
-      setShowInviteDialog(false)
+      setInviteFullName("")
+      setInvitePassword("")
+      setInviteUseCustomPassword(false)
       loadMembers()
     } catch (e: any) {
       toast.error(e.message || "Failed to invite")
@@ -120,6 +150,16 @@ export default function TeamSettingsPage() {
                 />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="invite-name">Full Name (optional)</Label>
+                <Input
+                  id="invite-name"
+                  type="text"
+                  value={inviteFullName}
+                  onChange={(e) => setInviteFullName(e.target.value)}
+                  placeholder="Jane Doe"
+                />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="invite-role">Role</Label>
                 <select
                   id="invite-role"
@@ -131,6 +171,60 @@ export default function TeamSettingsPage() {
                   <option value="user">User</option>
                 </select>
               </div>
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-2">
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 mt-0.5 rounded border-slate-300"
+                    checked={inviteUseCustomPassword}
+                    onChange={(e) => setInviteUseCustomPassword(e.target.checked)}
+                  />
+                  <div className="text-sm">
+                    <div className="font-medium text-slate-900">Set an initial password</div>
+                    <div className="text-xs text-slate-500">
+                      When unchecked, we email the new member a one-time link so they can set their own password.
+                    </div>
+                  </div>
+                </label>
+                {inviteUseCustomPassword && (
+                  <Input
+                    type="text"
+                    value={invitePassword}
+                    onChange={(e) => setInvitePassword(e.target.value)}
+                    placeholder="Min. 6 chars, mixed case + symbol"
+                  />
+                )}
+              </div>
+              {lastInviteInfo && (
+                <div className={
+                  "rounded-md border p-3 text-sm space-y-1 " +
+                  (lastInviteInfo.customEmailError
+                    ? "border-amber-300 bg-amber-50 text-amber-900"
+                    : "border-green-200 bg-green-50 text-green-900")
+                }>
+                  <p className="font-medium">
+                    {lastInviteInfo.customEmailError
+                      ? "User created, but the invite email had an issue"
+                      : "User created"}
+                  </p>
+                  {lastInviteInfo.sentTempPassword && (
+                    <p>
+                      Temporary password (copy now):{" "}
+                      <code className="rounded bg-white px-1 py-0.5 font-mono text-xs border">
+                        {lastInviteInfo.sentTempPassword}
+                      </code>
+                    </p>
+                  )}
+                  {lastInviteInfo.recoveryEmailSent && (
+                    <p>A separate password-set email was sent to the new member.</p>
+                  )}
+                  {lastInviteInfo.customEmailError && (
+                    <p className="text-xs">
+                      Error: {lastInviteInfo.customEmailError}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowInviteDialog(false)}>Cancel</Button>

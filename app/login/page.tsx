@@ -88,18 +88,14 @@ export default function LoginPage() {
               {errors.password && <p className="text-xs text-red-500">{errors.password.message}</p>}
             </div>
           </div>
-          <Button 
-            type="submit" 
-            className="w-full" 
+          <Button
+            type="submit"
+            className="w-full"
             disabled={isLoading}
           >
             {isLoading ? 'Signing in...' : 'Sign In'}
           </Button>
         </form>
-        <div className="text-center text-sm">
-          <span className="text-slate-600">Don't have an account? </span>
-          <a href="/register" className="font-medium text-blue-600 hover:underline">Sign up</a>
-        </div>
       </div>
     </div>
   )
