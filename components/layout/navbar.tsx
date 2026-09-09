@@ -59,7 +59,7 @@ export function Navbar({ onMobileMenuToggle, onDesktopSidebarToggle }: NavbarPro
         </Button>
         <div className="min-w-0">
           <h1 className="text-base font-semibold text-slate-900 truncate">
-            {profile ? profile.company?.name || "NexusCRM" : "NexusCRM"}
+            {profile ? profile.company?.name || "DigiNest Solutions" : "DigiNest Solutions"}
           </h1>
         </div>
       </div>

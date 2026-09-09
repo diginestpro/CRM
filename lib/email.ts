@@ -194,7 +194,7 @@ async function sendEmail(companyId: string, to: string, subject: string, html: s
     })
 
     const info = await transporter.sendMail({
-      from: `"${smtp.from_name || "NexusCRM"}" <${smtp.from_email}>`,
+      from: `"${smtp.from_name || "DigiNest Solutions"}" <${smtp.from_email}>`,
       to,
       subject,
       text,

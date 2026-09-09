@@ -78,7 +78,7 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }: 
             <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white flex-shrink-0 shadow-sm">
               <Briefcase className="h-5 w-5" />
             </div>
-            {!collapsed && <span className="whitespace-nowrap">NexusCRM</span>}
+            {!collapsed && <span className="whitespace-nowrap">DigiNest Solutions</span>}
           </Link>
           <Button
             variant="ghost"

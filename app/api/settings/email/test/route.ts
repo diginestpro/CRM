@@ -71,14 +71,14 @@ export async function POST(req: Request) {
     const toEmail = body?.to_email || cfg.from_email
     try {
       await transporter.sendMail({
-        from: `"${cfg.from_name || "NexusCRM"}" <${cfg.from_email}>`,
+        from: `"${cfg.from_name || "DigiNest Solutions"}" <${cfg.from_email}>`,
         to: toEmail,
-        subject: "NexusCRM - Test Email",
-        text: "This is a test email from your NexusCRM SMTP configuration.",
+        subject: "DigiNest Solutions - Test Email",
+        text: "This is a test email from your DigiNest Solutions SMTP configuration.",
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
             <h2 style="color: #2563eb;">Test Email Successful!</h2>
-            <p>This is a test email from your <strong>NexusCRM</strong> SMTP configuration.</p>
+            <p>This is a test email from your <strong>DigiNest Solutions</strong> SMTP configuration.</p>
             <p>If you received this, your email settings are working correctly!</p>
             <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
             <p style="color: #64748b; font-size: 12px;">SMTP Server: ${cfg.host}:${port}</p>
@@ -101,7 +101,7 @@ export async function POST(req: Request) {
       company_id: companyId,
       to_email: toEmail,
       from_email: cfg.from_email,
-      subject: "NexusCRM - Test Email",
+      subject: "DigiNest Solutions - Test Email",
       template: "test",
       status: "sent",
     })

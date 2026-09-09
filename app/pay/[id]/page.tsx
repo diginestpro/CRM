@@ -212,7 +212,7 @@ function InvoiceContent({ params }: { params: Promise<{ id: string }> }) {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-slate-500">
             <Shield className="h-4 w-4 text-green-600" />
-            <span>Secure payment powered by NexusCRM</span>
+            <span>Secure payment by DigiNest Solutions</span>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={handlePrint} className="text-slate-600">
@@ -460,7 +460,7 @@ function InvoiceContent({ params }: { params: Promise<{ id: string }> }) {
           <div className="px-6 sm:px-10 py-6 bg-slate-900 text-slate-300 text-center text-xs print:bg-slate-100 print:text-slate-600">
             <p>{companyFooter}</p>
             {companyTax && <p className="mt-1 opacity-70">Tax ID: {companyTax}</p>}
-            <p className="mt-1 opacity-70">Powered by NexusCRM</p>
+            <p className="mt-1 opacity-70">Powered by DigiNest Solutions</p>
           </div>
         </div>
 
