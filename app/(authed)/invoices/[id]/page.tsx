@@ -22,9 +22,23 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
 
     if (invoice) {
       if (invoice.client_id) {
-        const { data: cli } = await supabase.from("clients").select("*").eq("id", invoice.client_id).maybeSingle()
+        const { data: cli } = await supabase.from("clients").select("*, client_addresses(*)").eq("id", invoice.client_id).maybeSingle()
         invoice.clients = cli
       }
+      // Resolve the chosen address (if any) - prefer invoice.selected_address_id,
+      // else fall back to the client's default address (or the first one)
+      let address: any = null
+      if (invoice.selected_address_id) {
+        const { data: sel } = await supabase.from("client_addresses").select("*").eq("id", invoice.selected_address_id).maybeSingle()
+        address = sel
+      }
+      if (!address && invoice.clients?.client_addresses) {
+        address =
+          invoice.clients.client_addresses.find((a: any) => a.is_default) ||
+          invoice.clients.client_addresses[0] ||
+          null
+      }
+      invoice.selected_address = address
       const { data: items } = await supabase.from("invoice_items").select("*").eq("invoice_id", invoice.id)
       invoice.invoice_items = items || []
 
@@ -175,6 +189,22 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
                     <span className="font-bold">{invoice.clients.full_name}</span>
                     {invoice.clients.company_name && <span className="text-sm text-slate-600">{invoice.clients.company_name}</span>}
                     {invoice.clients.email && <span className="text-sm text-slate-600">{invoice.clients.email}</span>}
+                    {invoice.selected_address && (
+                      <div className="mt-3 rounded-md bg-slate-50 p-2 text-xs text-slate-600">
+                        <div className="font-medium text-slate-700 mb-0.5">
+                          {invoice.selected_address.label || "Billing Address"}
+                        </div>
+                        {invoice.selected_address.street && <div>{invoice.selected_address.street}</div>}
+                        {(invoice.selected_address.city || invoice.selected_address.state || invoice.selected_address.postal_code) && (
+                          <div>
+                            {[invoice.selected_address.city, invoice.selected_address.state, invoice.selected_address.postal_code]
+                              .filter(Boolean)
+                              .join(", ")}
+                          </div>
+                        )}
+                        {invoice.selected_address.country && <div>{invoice.selected_address.country}</div>}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <span className="text-slate-400 text-sm">No client info</span>

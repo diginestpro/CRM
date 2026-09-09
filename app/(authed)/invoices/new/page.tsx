@@ -36,11 +36,15 @@ type FormValues = z.infer<typeof schema>
 export default function NewInvoicePage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
-  const [clients, setClients] = useState<{ id: string; full_name: string; email: string | null }[]>([])
+  const [clients, setClients] = useState<{ id: string; full_name: string; email: string | null; allowed_gateways: string[] | null }[]>([])
   const [services, setServices] = useState<{ id: string; name: string; base_price: number }[]>([])
   const [showNewClient, setShowNewClient] = useState(false)
   const [newClient, setNewClient] = useState({ full_name: "", email: "", phone: "" })
   const [creatingClient, setCreatingClient] = useState(false)
+  const [clientAddresses, setClientAddresses] = useState<{ id: string; label: string | null; street: string | null; city: string | null; state: string | null; postal_code: string | null; country: string | null; is_default: boolean }[]>([])
+  const [selectedAddressId, setSelectedAddressId] = useState<string>("")
+  const [activeGateways, setActiveGateways] = useState<{ gateway_name: string }[]>([])
+  const [invoiceGateways, setInvoiceGateways] = useState<string[]>([])
 
   const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema) as any,
@@ -52,6 +56,8 @@ export default function NewInvoicePage() {
       notes: "",
     }
   })
+
+  const selectedClientId = watch("client_id")
 
   const items = watch("items") || []
   const taxRate = watch("tax_rate") || 0
@@ -66,11 +72,16 @@ export default function NewInvoicePage() {
     async function loadAll() {
       const sb = createClientBrowser()
       const [c, s, next] = await Promise.all([
-        sb.from("clients").select("id, full_name, email").order("full_name"),
+        sb.from("clients").select("id, full_name, email, allowed_gateways").order("full_name"),
         sb.from("services").select("id, name, base_price").eq("is_active", true).order("name"),
         fetch("/api/invoices/next-number").then(r => r.json()).catch(() => null),
       ])
-      setClients(c.data || [])
+      setClients(((c.data as any) || []).map((row: any) => ({
+        id: row.id,
+        full_name: row.full_name,
+        email: row.email ?? null,
+        allowed_gateways: row.allowed_gateways ?? null,
+      })))
       setServices(s.data || [])
       if (next?.success && next.number) {
         setValue("invoice_number", next.number)
@@ -79,9 +90,49 @@ export default function NewInvoicePage() {
         const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "")
         setValue("invoice_number", `INV-${stamp}-001`)
       }
+
+      // Load active company payment gateways once
+      try {
+        const res = await fetch("/api/settings/payments").then(r => r.json()).catch(() => null)
+        const list: any[] = res?.gateways || []
+        setActiveGateways(list.filter((g: any) => g.is_active).map((g: any) => ({ gateway_name: g.gateway_name })))
+      } catch { /* ignore */ }
     }
     loadAll()
   }, [setValue])
+
+  // Whenever the selected client changes, fetch that client's addresses and
+  // pre-select the default one. Also restrict the gateway picker to the
+  // client's allowed_gateways (or all active ones if the client has none set).
+  useEffect(() => {
+    if (!selectedClientId) {
+      setClientAddresses([])
+      setSelectedAddressId("")
+      setInvoiceGateways([])
+      return
+    }
+    let cancelled = false
+    async function loadAddresses() {
+      const sb = createClientBrowser()
+      const [{ data: addrs }, { data: cli }] = await Promise.all([
+        sb.from("client_addresses").select("*").eq("client_id", selectedClientId).order("is_default", { ascending: false }).order("created_at"),
+        sb.from("clients").select("allowed_gateways").eq("id", selectedClientId).maybeSingle(),
+      ])
+      if (cancelled) return
+      const list = (addrs as any[]) || []
+      setClientAddresses(list)
+      const def = list.find(a => a.is_default) || list[0]
+      setSelectedAddressId(def?.id || "")
+
+      // Compose the invoice gateway choices
+      const allowed: string[] | null = (cli as any)?.allowed_gateways || null
+      const activeNames = activeGateways.map(g => g.gateway_name)
+      const choices = allowed && allowed.length > 0 ? allowed : activeNames
+      setInvoiceGateways(choices)
+    }
+    loadAddresses()
+    return () => { cancelled = true }
+  }, [selectedClientId, activeGateways])
 
   async function refreshInvoiceNumber() {
     const res = await fetch("/api/invoices/next-number").then(r => r.json())
@@ -109,7 +160,15 @@ export default function NewInvoicePage() {
         phone: newClient.phone.trim() || null,
       }]).select("id, full_name, email").single()
       if (error) throw error
-      setClients(prev => [...prev, data])
+      setClients(prev => [
+        ...prev,
+        {
+          id: data.id,
+          full_name: data.full_name,
+          email: data.email ?? null,
+          allowed_gateways: (data as any).allowed_gateways ?? null,
+        },
+      ])
       setValue("client_id", data.id)
       setShowNewClient(false)
       setNewClient({ full_name: "", email: "", phone: "" })
@@ -169,6 +228,25 @@ export default function NewInvoicePage() {
         total_amount: i.quantity * i.unit_price,
       })))
       if (iE) throw iE
+
+      // Persist the selected address on the invoice row, if any.
+      if (selectedAddressId) {
+        await sb.from("invoices").update({ selected_address_id: selectedAddressId }).eq("id", inv.id)
+      }
+
+      // Persist the chosen payment gateways for this invoice.
+      // Replace any prior entries so the user always sees what they picked last.
+      await sb.from("invoice_payment_methods").delete().eq("invoice_id", inv.id)
+      if (invoiceGateways.length > 0) {
+        const { error: pmE } = await sb.from("invoice_payment_methods").insert(
+          invoiceGateways.map(g => ({
+            invoice_id: inv.id,
+            company_id,
+            payment_method: g,
+          }))
+        )
+        if (pmE) console.warn("[onSubmit] invoice_payment_methods insert warning:", pmE.message)
+      }
 
       // Optionally send email
       if (sendEmail && status !== "Draft") {
@@ -252,6 +330,83 @@ export default function NewInvoicePage() {
             </CardContent>
           </Card>
 
+          {/* Address selector: only visible once a client is picked */}
+          {selectedClientId && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Bill-To Address</CardTitle>
+                <CardDescription>
+                  Pick one of this client&apos;s saved addresses. It will appear on the invoice, PDF, and email.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {clientAddresses.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-slate-300 p-4 text-sm text-slate-500">
+                    No saved addresses yet. The client&apos;s primary email/country will be used instead.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {clientAddresses.map(a => {
+                      const line1 = [a.street, a.city, a.state, a.postal_code, a.country].filter(Boolean).join(", ")
+                      const checked = (selectedAddressId || "") === a.id
+                      return (
+                        <label
+                          key={a.id}
+                          className={
+                            "flex items-start gap-3 rounded-md border p-3 cursor-pointer transition " +
+                            (checked ? "border-blue-500 bg-blue-50" : "border-slate-200 hover:border-slate-300")
+                          }
+                        >
+                          <input
+                            type="radio"
+                            name="selected_address"
+                            className="mt-1"
+                            checked={checked}
+                            onChange={() => setSelectedAddressId(a.id)}
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">{a.label || "Address"}</span>
+                              {a.is_default && <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">Default</span>}
+                            </div>
+                            <div className="text-xs text-slate-500 mt-0.5">{line1 || "—"}</div>
+                          </div>
+                        </label>
+                      )
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Gateway selector: only show when there are gateways available AND a client is chosen */}
+          {selectedClientId && invoiceGateways.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Payment Gateways</CardTitle>
+                <CardDescription>Select the gateways the client can use to pay this invoice.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-4">
+                  {invoiceGateways.map(name => (
+                    <label key={name} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={invoiceGateways.includes(name)}
+                        onChange={() => setInvoiceGateways(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name])}
+                        className="h-4 w-4 rounded border-slate-300"
+                      />
+                      <span className="capitalize">{name}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-slate-500 mt-2">
+                  Untick a gateway to hide it on the public payment page for this invoice.
+                </p>
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardHeader><CardTitle>Invoice Details</CardTitle></CardHeader>
             <CardContent className="space-y-3">

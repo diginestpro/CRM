@@ -41,6 +41,7 @@ interface InvoiceLite {
   status: string
   notes?: string | null
   currency_code?: string
+  selected_address_id?: string | null
 }
 
 async function getSmtpSettings(companyId: string): Promise<SmtpSettings | null> {
@@ -246,6 +247,30 @@ export async function sendInvoiceEmail(companyId: string, invoiceId: string): Pr
   const appUrl = await getAppUrl(companyId)
   const payLink = `${appUrl}/pay/${invoice.id}`
 
+  // Resolve the chosen address for this invoice (multi-address support).
+  let billingAddressBlock = ""
+  if (invoice.selected_address_id) {
+    const { data: addr } = await supabase
+      .from("client_addresses")
+      .select("*")
+      .eq("id", invoice.selected_address_id)
+      .maybeSingle()
+    if (addr) {
+      const addrLines: string[] = []
+      if (addr.label) addrLines.push(`<div style="font-weight:600;color:#0f172a;">${addr.label}</div>`)
+      if (addr.street) addrLines.push(`<div>${addr.street}</div>`)
+      const cityLine = [addr.city, addr.state, addr.postal_code].filter(Boolean).join(", ")
+      if (cityLine) addrLines.push(`<div>${cityLine}</div>`)
+      if (addr.country) addrLines.push(`<div>${addr.country}</div>`)
+      billingAddressBlock = `
+        <div style="margin:16px 0;padding:12px 14px;background:#f1f5f9;border-radius:6px;font-size:13px;color:#475569;">
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:#94a3b8;letter-spacing:0.05em;margin-bottom:4px;">Billing Address</div>
+          ${addrLines.join("")}
+        </div>
+      `
+    }
+  }
+
   const statusColors: Record<string, string> = {
     Draft: "#64748b", Unpaid: "#f59e0b", Partial: "#3b82f6",
     Paid: "#10b981", Overdue: "#ef4444", Cancelled: "#6b7280",
@@ -291,6 +316,7 @@ export async function sendInvoiceEmail(companyId: string, invoiceId: string): Pr
       <tr><td style="text-align:right;padding:8px 4px;font-weight:700;font-size:16px;border-top:1px solid #e2e8f0;">Total</td><td style="text-align:right;padding:8px 4px;font-weight:700;font-size:16px;border-top:1px solid #e2e8f0;">${formatMoney(invoice.total_amount, currency)}</td></tr>
     </table>
 
+    ${billingAddressBlock}
     ${invoice.status !== "Paid" && invoice.status !== "Cancelled" ? `
     <div style="text-align:center;margin:24px 0;">
       <a href="${payLink}" style="display:inline-block;background:${company.brand_color || "#2563eb"};color:white;padding:12px 32px;text-decoration:none;border-radius:6px;font-weight:600;">View &amp; Pay Invoice</a>

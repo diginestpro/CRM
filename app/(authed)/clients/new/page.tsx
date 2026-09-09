@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -22,6 +22,14 @@ const clientSchema = z.object({
   tax_number: z.string().optional(),
   country: z.string().optional(),
   notes: z.string().optional(),
+  address: z.object({
+    label: z.string().optional(),
+    street: z.string().optional(),
+    city: z.string().optional(),
+    state: z.string().optional(),
+    postal_code: z.string().optional(),
+    country: z.string().optional(),
+  }).optional(),
 })
 
 type ClientFormValues = z.infer<typeof clientSchema>
@@ -29,9 +37,30 @@ type ClientFormValues = z.infer<typeof clientSchema>
 export default function NewClientPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  const [allowedGateways, setAllowedGateways] = useState<string[]>(["stripe", "paypal", "safepay"])
+  const [activeGateways, setActiveGateways] = useState<{ gateway_name: string }[]>([])
   const { register, handleSubmit, formState: { errors } } = useForm<ClientFormValues>({
-    resolver: zodResolver(clientSchema),
+    resolver: zodResolver(clientSchema) as any,
   })
+
+  useEffect(() => {
+    async function loadGateways() {
+      try {
+        const res = await fetch("/api/settings/payments").then(r => r.json()).catch(() => null)
+        const list: any[] = res?.gateways || []
+        const active = list.filter((g: any) => g.is_active).map((g: any) => g.gateway_name)
+        setActiveGateways(active.map((n: string) => ({ gateway_name: n })))
+        setAllowedGateways(active)
+      } catch { /* ignore */ }
+    }
+    loadGateways()
+  }, [])
+
+  function toggleGateway(name: string) {
+    setAllowedGateways(prev =>
+      prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
+    )
+  }
 
   async function onSubmit(values: ClientFormValues) {
     setIsLoading(true)
@@ -43,11 +72,46 @@ export default function NewClientPage() {
         router.push("/onboarding")
         return
       }
-      const { error } = await supabase.from("clients").insert([{ ...values, company_id, is_archived: false }])
-      if (error) toast.error(error.message)
-      else { toast.success("Client created!"); router.push("/clients"); router.refresh() }
-    } catch (err) { toast.error("Error") }
-    finally { setIsLoading(false) }
+      const { address, ...clientFields } = values
+      const { data: inserted, error } = await supabase
+        .from("clients")
+        .insert([
+          {
+            ...clientFields,
+            company_id,
+            is_archived: false,
+            allowed_gateways: allowedGateways.length > 0 ? allowedGateways : null,
+          },
+        ])
+        .select("id")
+        .single()
+      if (error) {
+        toast.error(error.message)
+        return
+      }
+      const hasAddress = address && Object.values(address).some(v => v && String(v).trim() !== "")
+      if (inserted?.id && hasAddress) {
+        const { error: addrErr } = await supabase.from("client_addresses").insert({
+          client_id: inserted.id,
+          company_id,
+          label: address?.label || "Primary",
+          street: address?.street || null,
+          city: address?.city || null,
+          state: address?.state || null,
+          postal_code: address?.postal_code || null,
+          country: address?.country || null,
+          is_default: true,
+        })
+        if (addrErr) console.warn("[NewClient] address insert warning:", addrErr.message)
+      }
+      toast.success("Client created!")
+      router.push("/clients")
+      router.refresh()
+    } catch (err) {
+      toast.error("Error")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -70,6 +134,44 @@ export default function NewClientPage() {
             <div className="space-y-2"><Label htmlFor="country">Country</Label><Input id="country" {...register("country")} placeholder="United States" /></div>
           </div>
           <div className="space-y-2"><Label htmlFor="notes">Notes</Label><textarea id="notes" {...register("notes")} className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder="Additional details..." /></div>
+
+          <div className="border-t pt-6 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-700">Primary Address (optional)</h3>
+              <span className="text-xs text-slate-500">You can add more addresses later.</span>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2"><Label>Label</Label><Input {...register("address.label")} placeholder="e.g. Head Office" /></div>
+              <div className="space-y-2 md:col-span-2"><Label>Street</Label><Input {...register("address.street")} placeholder="2211 N First St" /></div>
+              <div className="space-y-2"><Label>City</Label><Input {...register("address.city")} placeholder="San Jose" /></div>
+              <div className="space-y-2"><Label>State / Province</Label><Input {...register("address.state")} placeholder="CA" /></div>
+              <div className="space-y-2"><Label>Postal Code</Label><Input {...register("address.postal_code")} placeholder="95131" /></div>
+              <div className="space-y-2"><Label>Country</Label><Input {...register("address.country")} placeholder="United States" /></div>
+            </div>
+          </div>
+
+          <div className="border-t pt-6 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-700">Allowed Payment Gateways</h3>
+              <span className="text-xs text-slate-500">Untick to disable a gateway for this client.</span>
+            </div>
+            <div className="flex flex-wrap gap-4">
+              {activeGateways.length === 0 ? (
+                <p className="text-xs text-slate-500">No active gateways yet. Configure them in Settings &rarr; Payments.</p>
+              ) : activeGateways.map(g => (
+                <label key={g.gateway_name} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={allowedGateways.includes(g.gateway_name)}
+                    onChange={() => toggleGateway(g.gateway_name)}
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  <span className="capitalize">{g.gateway_name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
           <div className="flex justify-end gap-3 border-t pt-6">
             <Button variant="outline" asChild><Link href="/clients">Cancel</Link></Button>
             <Button type="submit" disabled={isLoading}>{isLoading ? "Saving..." : "Save Client"}</Button>

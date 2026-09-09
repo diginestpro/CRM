@@ -29,6 +29,20 @@ export function InvoicePrintLayout({ invoice }: InvoicePrintProps) {
           <p>{invoice.clients?.company_name}</p>
           <p>{invoice.clients?.email}</p>
           <p>{invoice.clients?.phone}</p>
+          {invoice.selected_address && (
+            <div className="text-sm text-slate-600 mt-1">
+              {invoice.selected_address.label && <div className="font-semibold mt-1">{invoice.selected_address.label}</div>}
+              {invoice.selected_address.street && <div>{invoice.selected_address.street}</div>}
+              {(invoice.selected_address.city || invoice.selected_address.state || invoice.selected_address.postal_code) && (
+                <div>
+                  {[invoice.selected_address.city, invoice.selected_address.state, invoice.selected_address.postal_code]
+                    .filter(Boolean)
+                    .join(", ")}
+                </div>
+              )}
+              {invoice.selected_address.country && <div>{invoice.selected_address.country}</div>}
+            </div>
+          )}
         </div>
         <div className="text-right space-y-2">
           <h3 className="font-bold text-slate-500 uppercase text-sm">Invoice Status:</h3>
