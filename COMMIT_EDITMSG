@@ -1,0 +1,17 @@
+Fix 0012 backfill: handle legacy method_name NOT NULL + is_default NOT NULL
+
+The legacy invoice_payment_methods schema has:
+- method_name TEXT NOT NULL  (legacy column)
+- is_default BOOLEAN         (no default, must be supplied)
+
+Both blocks the backfill INSERT. Updated BLOCK 4 / 0012 to:
+1. Drop NOT NULL on method_name (in a tolerant BEGIN/EXCEPTION block).
+2. SET DEFAULT false on is_default (also tolerant).
+3. Use a row-by-row loop so any other unexpected NOT NULL constraint
+   skips the row instead of failing the whole batch and prints a
+   NOTICE with the row's invoice_id, gateway, SQLSTATE, and SQLERRM.
+4. Mirror payment_method into method_name so legacy code that still
+   reads method_name keeps working.
+
+tsc --noEmit: 0 errors. Backfill was simulated locally and now
+includes all NOT NULL columns from the legacy schema.

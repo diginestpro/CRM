@@ -186,36 +186,89 @@ END $$;
 -- invoices.status CHECK. Verification.
 -- ============================================================
 
+-- 4a-pre. The legacy schema has both `method_name TEXT NOT NULL`
+--         AND `is_default BOOLEAN` (without a DEFAULT clause) on
+--         invoice_payment_methods. Both must be supplied for any
+--         INSERT. The application only writes payment_method and
+--         is_default is conceptually always false for "this invoice
+--         allows this gateway" rows. Drop the NOT NULL constraint
+--         on method_name and assign a DEFAULT of false on
+--         is_default so the backfill below can insert cleanly.
+DO $$
+BEGIN
+    BEGIN
+        ALTER TABLE public.invoice_payment_methods
+            ALTER COLUMN method_name DROP NOT NULL;
+        RAISE NOTICE '0012-pre: dropped NOT NULL on invoice_payment_methods.method_name';
+    EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE '0012-pre: method_name NOT NULL drop skipped (%): %', SQLSTATE, SQLERRM;
+    END;
+
+    BEGIN
+        ALTER TABLE public.invoice_payment_methods
+            ALTER COLUMN is_default SET DEFAULT false;
+        RAISE NOTICE '0012-pre: defaulted is_default on invoice_payment_methods';
+    EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE '0012-pre: is_default DEFAULT skipped (%): %', SQLSTATE, SQLERRM;
+    END;
+END $$;
+
 -- 4a. Backfill invoice_payment_methods
 DO $$
 DECLARE
     v_inserted INT := 0;
+    v_skipped  INT := 0;
+    v_row      RECORD;
 BEGIN
-    INSERT INTO public.invoice_payment_methods (
-        invoice_id, company_id, payment_method, created_at
-    )
-    SELECT
-        i.id,
-        i.company_id,
-        pg.gateway_name,
-        NOW()
-    FROM public.invoices i
-    JOIN public.payment_gateways pg
-      ON pg.company_id = i.company_id
-     AND pg.is_active = TRUE
-    LEFT JOIN public.clients c
-      ON c.id = i.client_id
-    WHERE i.company_id IS NOT NULL
-      AND i.id NOT IN (SELECT invoice_id FROM public.invoice_payment_methods
-                       WHERE invoice_id IS NOT NULL)
-      AND (
-            c.allowed_gateways IS NULL
-         OR c.allowed_gateways = '{}'::text[]
-         OR pg.gateway_name = ANY (c.allowed_gateways)
-          );
+    -- Iterate per (invoice, gateway) pair so any unexpected NOT NULL
+    -- on a legacy column can be silently filled in instead of
+    -- aborting the whole batch.
+    FOR v_row IN
+        SELECT
+            i.id            AS invoice_id,
+            i.company_id    AS company_id,
+            pg.gateway_name AS payment_method
+        FROM public.invoices i
+        JOIN public.payment_gateways pg
+          ON pg.company_id = i.company_id
+         AND pg.is_active = TRUE
+        LEFT JOIN public.clients c
+          ON c.id = i.client_id
+        WHERE i.company_id IS NOT NULL
+          AND i.id NOT IN (SELECT invoice_id FROM public.invoice_payment_methods
+                           WHERE invoice_id IS NOT NULL)
+          AND (
+                c.allowed_gateways IS NULL
+             OR c.allowed_gateways = '{}'::text[]
+             OR pg.gateway_name = ANY (c.allowed_gateways)
+              )
+    LOOP
+        BEGIN
+            INSERT INTO public.invoice_payment_methods (
+                invoice_id,
+                company_id,
+                payment_method,
+                method_name,    -- legacy column; mirror payment_method
+                is_default,     -- legacy column; default false
+                created_at
+            )
+            VALUES (
+                v_row.invoice_id,
+                v_row.company_id,
+                v_row.payment_method,
+                v_row.payment_method,
+                false,
+                NOW()
+            );
+            v_inserted := v_inserted + 1;
+        EXCEPTION WHEN OTHERS THEN
+            v_skipped := v_skipped + 1;
+            RAISE NOTICE '0012: skipped row (invoice %, gateway %): % %',
+                v_row.invoice_id, v_row.payment_method, SQLSTATE, SQLERRM;
+        END;
+    END LOOP;
 
-    GET DIAGNOSTICS v_inserted = ROW_COUNT;
-    RAISE NOTICE '0012: backfilled % invoice_payment_methods rows', v_inserted;
+    RAISE NOTICE '0012: backfilled % invoice_payment_methods rows (skipped %)', v_inserted, v_skipped;
 END $$;
 
 -- 4b. Harden get_my_company_id
