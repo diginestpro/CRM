@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { loadFromBlock } from "@/lib/company-address"
+import { resolveBranding, buildLegalFooterLinks } from "@/lib/branding"
 
 // Rate limiting per IP
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
@@ -58,7 +59,28 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       .select("payment_method")
       .eq("invoice_id", id)
 
-    invoice.allowed_methods = paymentMethods?.map(m => m.payment_method) || []
+    // Load active company payment gateways (only those currently
+    // enabled in Settings -> Payments). We intersect with the
+    // invoice's saved set so a gateway that was deactivated AFTER the
+    // invoice was created won't appear on the public pay page.
+    let activeNames: string[] = []
+    if (invoice.company_id) {
+      const { data: activeRows } = await supabase
+        .from("payment_gateways")
+        .select("gateway_name, is_active")
+        .eq("company_id", invoice.company_id)
+        .eq("is_active", true)
+      activeNames = (activeRows || []).map((r) => r.gateway_name)
+    }
+
+    const savedMethods = (paymentMethods?.map(m => m.payment_method) || [])
+      .filter((m) => activeNames.includes(m))
+    // If the saved set is empty after filtering (e.g. older invoice
+    // whose payment_methods rows haven't been populated yet, or all
+    // saved gateways are now inactive), fall back to the active set so
+    // the client can still pay via SOME gateway.
+    invoice.allowed_methods = savedMethods.length > 0 ? savedMethods : activeNames
+
     // Note: defaults are safe even on older invoices that haven't yet
     // been saved with these columns (e.g. before migration 0009).
     invoice.allows_partial_payments = invoice.allows_partial_payments ?? false
@@ -76,6 +98,24 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     // Resolve the chosen office address (USA / PK / UAE / ...) for the
     // "From" block shown on /pay and the receipt page.
     invoice.from_block = await loadFromBlock(supabase, invoice)
+
+    // Resolve branding (brand_name + website) once so the pay page,
+    // receipt, and email senders can all read it from invoice.branding.
+    let appSettings: any = null
+    if (invoice.company_id) {
+      const { data } = await supabase
+        .from("app_settings")
+        .select("*")
+        .eq("company_id", invoice.company_id)
+        .maybeSingle()
+      appSettings = data || null
+    }
+    invoice.branding = resolveBranding({
+      company: invoice.companies,
+      appSettings,
+      footerText: invoice.companies?.footer_text ?? null,
+    })
+    invoice.footer_links = buildLegalFooterLinks(invoice.branding)
 
     return NextResponse.json({ invoice })
   } catch (e: any) {

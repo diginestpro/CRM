@@ -5,6 +5,7 @@ import { createClientBrowser } from "@/lib/supabase/client"
 import { Bell, Menu, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { BRAND_NAME_FALLBACK } from "@/lib/branding"
 
 interface NavbarProps {
   onMobileMenuToggle: () => void
@@ -59,7 +60,7 @@ export function Navbar({ onMobileMenuToggle, onDesktopSidebarToggle }: NavbarPro
         </Button>
         <div className="min-w-0">
           <h1 className="text-base font-semibold text-slate-900 truncate">
-            {profile ? profile.company?.name || "DigiNest Solutions" : "DigiNest Solutions"}
+            {profile ? profile.company?.name || BRAND_NAME_FALLBACK : BRAND_NAME_FALLBACK}
           </h1>
         </div>
       </div>

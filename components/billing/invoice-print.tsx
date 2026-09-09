@@ -1,4 +1,5 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { BRAND_NAME_FALLBACK } from '@/lib/branding'
 
 interface InvoicePrintProps {
   invoice: any
@@ -56,6 +57,7 @@ export function InvoicePrintLayout({ invoice }: InvoicePrintProps) {
           <h3 className="font-bold text-slate-500 uppercase text-sm">Bill To:</h3>
           <p className="font-bold text-lg">{invoice.clients?.full_name}</p>
           <p>{invoice.clients?.company_name}</p>
+          {invoice.clients?.project_name && <p className="italic text-slate-500">Project: {invoice.clients.project_name}</p>}
           <p>{invoice.clients?.email}</p>
           <p>{invoice.clients?.phone}</p>
           {invoice.selected_address && (
@@ -125,7 +127,7 @@ export function InvoicePrintLayout({ invoice }: InvoicePrintProps) {
           {" · "}
           <a href="https://diginest.pro/terms-and-conditions/" className="underline hover:text-slate-600">Terms &amp; Conditions</a>
         </p>
-        <p>© 2026 DigiNest Solutions</p>
+        <p>© {(invoice as any).branding?.copyright_year || new Date().getFullYear()} {(invoice as any).branding?.brand_name || BRAND_NAME_FALLBACK}</p>
       </div>
     </div>
   )

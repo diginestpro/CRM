@@ -33,13 +33,13 @@ export function BillingItems<T extends FieldValues>({ control, setValue, watch, 
     <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
       <div className="p-4 border-b bg-slate-50 flex justify-between items-center">
         <h3 className="font-semibold">Line Items</h3>
-        <Button type="button" variant="outline" size="sm" onClick={() => append({ service_id: '', quantity: 1, unit_price: 0 } as any)}>
+        <Button type="button" variant="outline" size="sm" onClick={() => append({ service_id: '', quantity: 1, unit_price: 0, description: '' } as any)}>
           <Plus className="h-4 w-4 mr-1" /> Add Item
         </Button>
       </div>
       <div className="p-6 space-y-4">
         {fields.map((f, i) => (
-          <div key={f.id} className="grid grid-cols-1 gap-4 md:grid-cols-12 items-end border-b pb-4 last:border-0 last:pb-0">
+          <div key={f.id} className="grid grid-cols-1 gap-4 md:grid-cols-12 items-start border-b pb-4 last:border-0 last:pb-0">
             <div className="md:col-span-4 space-y-2">
               <Label className="text-xs">Service</Label>
               <select 
@@ -60,15 +60,24 @@ export function BillingItems<T extends FieldValues>({ control, setValue, watch, 
               <Input type="number" step="0.01" {...control.register(`items.${i}.unit_price` as any, { valueAsNumber: true })} />
             </div>
             <div className="md:col-span-2 space-y-2">
-              <Label className="text-xs">Total</Label>
+              <Label className="text-xs">Line Total</Label>
               <div className="h-10 flex items-center font-medium">
                 {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
                   Number(values.items?.[i]?.quantity || 0) * Number(values.items?.[i]?.unit_price || 0)
                 )}
               </div>
             </div>
-            <div className="md:col-span-1">
+            <div className="md:col-span-1 flex justify-end">
               <Button type="button" variant="ghost" size="icon" className="text-red-500" onClick={() => remove(i)}><Trash2 className="h-4 w-4" /></Button>
+            </div>
+            <div className="md:col-span-12 space-y-2">
+              <Label className="text-xs">Description (optional)</Label>
+              <textarea
+                {...control.register(`items.${i}.description` as any)}
+                rows={2}
+                placeholder="Optional line-item description that appears on the invoice"
+                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              />
             </div>
           </div>
         ))}

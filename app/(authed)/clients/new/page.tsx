@@ -16,6 +16,7 @@ import Link from "next/link"
 const clientSchema = z.object({
   full_name: z.string().min(2, "Full name is required"),
   company_name: z.string().optional(),
+  project_name: z.string().optional(),
   email: z.string().email("Invalid email").optional().or(z.literal("")),
   phone: z.string().optional(),
   website: z.string().url("Invalid URL").optional().or(z.literal("")),
@@ -130,6 +131,7 @@ export default function NewClientPage() {
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div className="space-y-2"><Label htmlFor="full_name">Full Name *</Label><Input id="full_name" {...register("full_name")} placeholder="Jane Doe" className={errors.full_name ? "border-red-500" : ""} />{errors.full_name && <p className="text-xs text-red-500">{errors.full_name.message}</p>}</div>
             <div className="space-y-2"><Label htmlFor="company_name">Company Name</Label><Input id="company_name" {...register("company_name")} placeholder="Acme Inc." /></div>
+            <div className="space-y-2"><Label htmlFor="project_name">Project Name</Label><Input id="project_name" {...register("project_name")} placeholder="Acme Q1 Website" /></div>
             <div className="space-y-2"><Label htmlFor="email">Email Address</Label><Input id="email" type="email" {...register("email")} placeholder="jane@example.com" className={errors.email ? "border-red-500" : ""} />{errors.email && <p className="text-xs text-red-500">{errors.email.message}</p>}</div>
             <div className="space-y-2"><Label htmlFor="phone">Phone Number</Label><Input id="phone" {...register("phone")} placeholder="+1 555 0000" /></div>
             <div className="space-y-2"><Label htmlFor="website">Website</Label><Input id="website" type="url" {...register("website")} placeholder="https://example.com" className={errors.website ? "border-red-500" : ""} />{errors.website && <p className="text-xs text-red-500">{errors.website.message}</p>}</div>

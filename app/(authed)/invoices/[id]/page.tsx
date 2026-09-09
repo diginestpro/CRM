@@ -252,6 +252,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
                   <div className="flex flex-col">
                     <span className="font-bold">{invoice.clients.full_name}</span>
                     {invoice.clients.company_name && <span className="text-sm text-slate-600">{invoice.clients.company_name}</span>}
+                    {invoice.clients.project_name && <span className="text-xs text-slate-500 italic">Project: {invoice.clients.project_name}</span>}
                     {invoice.clients.email && <span className="text-sm text-slate-600">{invoice.clients.email}</span>}
                     {invoice.selected_address && (
                       <div className="mt-3 rounded-md bg-slate-50 p-2 text-xs text-slate-600">

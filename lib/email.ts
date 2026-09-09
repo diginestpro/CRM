@@ -2,6 +2,7 @@ import nodemailer from "nodemailer"
 import { createClientAdmin } from "./supabase/client"
 import { getAppSettings } from "./payment-gateways"
 import { loadFromBlock, resolveFromBlock } from "./company-address"
+import { resolveBranding, buildLegalFooterLinks } from "./branding"
 
 interface CompanyBranding {
   name: string
@@ -17,6 +18,21 @@ interface CompanyBranding {
   tagline?: string
   brand_color?: string
   footer_text?: string
+  // Resolved branding block (brand_name + website + copyright year).
+  // Populated by lib/email.ts senders from companies + app_settings.
+  branding?: {
+    brand_name: string
+    company_website: string
+    footer_text: string | null
+    copyright_year: string
+    is_overridden: boolean
+  }
+  // Pre-computed legal-footer URLs (refund / website / terms).
+  footer_links?: {
+    refund_policy: string
+    website: string
+    terms: string
+  }
 }
 
 interface SmtpSettings {
@@ -120,7 +136,7 @@ function buildEmailWrapper(company: CompanyBranding, content: string, opts?: { f
       <table style="width:100%;"><tr>
         <td style="vertical-align:middle;">${logo}</td>
         <td style="vertical-align:middle;text-align:right;">
-          <div style="font-size:16px;font-weight:700;color:${brandColor};">${company.name}</div>
+          <div style="font-size:16px;font-weight:700;color:${brandColor};">${company.branding?.brand_name || company.name}</div>
           ${company.tagline ? `<div style="font-size:12px;color:#64748b;font-style:italic;">${company.tagline}</div>` : ""}
           ${fromBlock.address_name ? `<div style="font-size:11px;color:#2563eb;font-weight:600;margin-top:4px;">${fromBlock.address_name}</div>` : ""}
           ${addressHtml ? `<div style="font-size:12px;color:#64748b;line-height:1.5;margin-top:4px;">${addressHtml}</div>` : ""}
@@ -132,13 +148,13 @@ function buildEmailWrapper(company: CompanyBranding, content: string, opts?: { f
     <div style="padding:16px 32px;background:#f1f5f9;border-top:1px solid #e2e8f0;font-size:11px;color:#64748b;text-align:center;">
       ${company.footer_text ? `<div style="margin-bottom:8px;">${company.footer_text}</div>` : ""}
       <div style="margin-bottom:6px;">
-        <a href="https://diginest.pro/return-refund-policy-service-based-only/" style="color:#64748b;text-decoration:underline;">Refund Policy</a>
+        <a href="${company.footer_links?.refund_policy || company.branding?.company_website + "/return-refund-policy-service-based-only/"}" style="color:#64748b;text-decoration:underline;">Refund Policy</a>
         &nbsp;&middot;&nbsp;
-        <a href="https://diginest.pro/" style="color:#64748b;text-decoration:underline;">DigiNest.pro</a>
+        <a href="${company.footer_links?.website || company.branding?.company_website + "/"}" style="color:#64748b;text-decoration:underline;">${company.branding?.brand_name || company.name}</a>
         &nbsp;&middot;&nbsp;
-        <a href="https://diginest.pro/terms-and-conditions/" style="color:#64748b;text-decoration:underline;">Terms &amp; Conditions</a>
+        <a href="${company.footer_links?.terms || company.branding?.company_website + "/terms-and-conditions/"}" style="color:#64748b;text-decoration:underline;">Terms &amp; Conditions</a>
       </div>
-      <div>&copy; 2026 DigiNest Solutions</div>
+      <div>&copy; ${company.branding?.copyright_year || new Date().getFullYear()} ${company.branding?.brand_name || company.name}</div>
     </div>
   </div>
 </body>
@@ -194,7 +210,7 @@ async function sendEmail(companyId: string, to: string, subject: string, html: s
     })
 
     const info = await transporter.sendMail({
-      from: `"${smtp.from_name || "DigiNest Solutions"}" <${smtp.from_email}>`,
+      from: `"${smtp.from_name || process.env.NEXT_PUBLIC_BRAND_NAME || "DigiNest Solutions"}" <${smtp.from_email}>`,
       to,
       subject,
       text,
@@ -243,15 +259,27 @@ async function sendEmail(companyId: string, to: string, subject: string, html: s
 export async function sendInvoiceEmail(companyId: string, invoiceId: string): Promise<SendEmailResult> {
   const supabase = createClientAdmin()
 
-  const [invoiceResult, itemsResult, companyResult] = await Promise.all([
+  const [invoiceResult, itemsResult, companyResult, appSettingsResult] = await Promise.all([
     supabase.from("invoices").select("*").eq("id", invoiceId).maybeSingle(),
     supabase.from("invoice_items").select("*, services(name)").eq("invoice_id", invoiceId),
     supabase.from("companies").select("*").eq("id", companyId).maybeSingle(),
+    supabase.from("app_settings").select("*").eq("company_id", companyId).maybeSingle(),
   ])
 
   const invoice = invoiceResult.data as InvoiceLite | null
   const items = itemsResult.data || []
   const company = companyResult.data as CompanyBranding | null
+  const appSettings = (appSettingsResult.data as any) || null
+  // Attach resolved branding + footer links so the wrapper renders the
+  // correct brand name + URLs without hard-coding.
+  if (company) {
+    company.branding = resolveBranding({
+      company: { name: company.name },
+      appSettings: { brand_name: appSettings?.brand_name, company_website: appSettings?.company_website },
+      footerText: company.footer_text ?? null,
+    })
+    company.footer_links = buildLegalFooterLinks(company.branding)
+  }
 
   if (!invoice) return { ok: false, error: "Invoice not found" }
   if (!company) return { ok: false, error: "Company not found" }
@@ -371,11 +399,20 @@ Pay: ${payLink}`
 
 export async function sendReceiptEmail(companyId: string, invoiceId: string): Promise<SendEmailResult> {
   const supabase = createClientAdmin()
-  const { data: invoice } = await supabase.from("invoices").select("*").eq("id", invoiceId).maybeSingle()
-  const { data: company } = await supabase.from("companies").select("*").eq("id", companyId).maybeSingle()
+  const [{ data: invoice }, { data: company }, { data: appSettings }] = await Promise.all([
+    supabase.from("invoices").select("*").eq("id", invoiceId).maybeSingle(),
+    supabase.from("companies").select("*").eq("id", companyId).maybeSingle(),
+    supabase.from("app_settings").select("*").eq("company_id", companyId).maybeSingle(),
+  ])
 
   if (!invoice) return { ok: false, error: "Invoice not found" }
   if (!company) return { ok: false, error: "Company not found" }
+  company.branding = resolveBranding({
+    company: { name: company.name },
+    appSettings: { brand_name: appSettings?.brand_name, company_website: appSettings?.company_website },
+    footerText: company.footer_text ?? null,
+  })
+  company.footer_links = buildLegalFooterLinks(company.branding)
 
   let client: any = null
   if (invoice.client_id) {
@@ -408,11 +445,20 @@ export async function sendReceiptEmail(companyId: string, invoiceId: string): Pr
 
 export async function sendOverdueReminder(companyId: string, invoiceId: string): Promise<SendEmailResult> {
   const supabase = createClientAdmin()
-  const { data: invoice } = await supabase.from("invoices").select("*").eq("id", invoiceId).maybeSingle()
-  const { data: company } = await supabase.from("companies").select("*").eq("id", companyId).maybeSingle()
+  const [{ data: invoice }, { data: company }, { data: appSettings }] = await Promise.all([
+    supabase.from("invoices").select("*").eq("id", invoiceId).maybeSingle(),
+    supabase.from("companies").select("*").eq("id", companyId).maybeSingle(),
+    supabase.from("app_settings").select("*").eq("company_id", companyId).maybeSingle(),
+  ])
 
   if (!invoice) return { ok: false, error: "Invoice not found" }
   if (!company) return { ok: false, error: "Company not found" }
+  company.branding = resolveBranding({
+    company: { name: company.name },
+    appSettings: { brand_name: appSettings?.brand_name, company_website: appSettings?.company_website },
+    footerText: company.footer_text ?? null,
+  })
+  company.footer_links = buildLegalFooterLinks(company.branding)
 
   let client: any = null
   if (invoice.client_id) {
