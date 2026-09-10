@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from "react"
 import { createClientBrowser } from "@/lib/supabase/client"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { ArrowDownRight, Clock, CreditCard } from "lucide-react"
+import { Clock, CreditCard, Wallet, Search } from "lucide-react"
+import { PageHeader } from "@/components/layout/page-header"
+import { StatCard } from "@/components/layout/stat-card"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { Input } from "@/components/ui/input"
 
 interface Payment {
   id: string
@@ -20,6 +23,7 @@ export default function PaymentsPage() {
   const [payments, setPayments] = useState<Payment[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [filter, setFilter] = useState("all")
+  const [search, setSearch] = useState("")
 
   useEffect(() => {
     async function load() {
@@ -34,9 +38,13 @@ export default function PaymentsPage() {
   }, [])
 
   const filtered = payments.filter(p => {
-    if (filter === "all") return true
-    if (filter === "completed") return p.status === "Completed"
-    if (filter === "pending") return p.status === "Pending"
+    if (filter === "completed" && p.status !== "Completed") return false
+    if (filter === "pending" && p.status !== "Pending") return false
+    if (search) {
+      const q = search.toLowerCase()
+      if (!((p.invoices?.invoice_number || "").toLowerCase().includes(q) ||
+            (p.invoices?.clients?.full_name || "").toLowerCase().includes(q))) return false
+    }
     return true
   })
 
@@ -45,34 +53,70 @@ export default function PaymentsPage() {
 
   return (
     <div className="space-y-6">
-      <div><h2 className="text-3xl font-bold tracking-tight text-slate-900">Payments</h2><p className="text-slate-500">Track all incoming and outgoing payments.</p></div>
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-slate-500">Total Received</CardTitle><ArrowDownRight className="h-4 w-4 text-green-500" /></CardHeader><CardContent><div className="text-2xl font-bold text-green-600">${totalReceived.toLocaleString()}</div></CardContent></Card>
-        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-slate-500">Pending</CardTitle><Clock className="h-4 w-4 text-orange-500" /></CardHeader><CardContent><div className="text-2xl font-bold text-orange-600">${totalPending.toLocaleString()}</div></CardContent></Card>
-        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-slate-500">Total Transactions</CardTitle><CreditCard className="h-4 w-4 text-blue-500" /></CardHeader><CardContent><div className="text-2xl font-bold">{payments.length}</div></CardContent></Card>
+      <PageHeader
+        title="Payments"
+        description="Track all incoming and outgoing payments."
+      />
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
+        <StatCard
+          title="Total Received"
+          value={"$" + totalReceived.toLocaleString()}
+          description="Completed payments"
+          icon={Wallet}
+          iconClassName="bg-emerald-50 text-emerald-600"
+        />
+        <StatCard
+          title="Pending"
+          value={"$" + totalPending.toLocaleString()}
+          description="Awaiting settlement"
+          icon={Clock}
+          iconClassName="bg-amber-50 text-amber-600"
+        />
+        <StatCard
+          title="Total Transactions"
+          value={payments.length.toString()}
+          description="All-time"
+          icon={CreditCard}
+          iconClassName="bg-indigo-50 text-indigo-600"
+        />
       </div>
-      <div className="flex items-center gap-2">
-        <button type="button" onClick={() => setFilter("all")} className={filter === "all" ? "px-3 py-1 rounded text-sm bg-blue-600 text-white" : "px-3 py-1 rounded text-sm border"}>All</button>
-        <button type="button" onClick={() => setFilter("completed")} className={filter === "completed" ? "px-3 py-1 rounded text-sm bg-blue-600 text-white" : "px-3 py-1 rounded text-sm border"}>Completed</button>
-        <button type="button" onClick={() => setFilter("pending")} className={filter === "pending" ? "px-3 py-1 rounded text-sm bg-blue-600 text-white" : "px-3 py-1 rounded text-sm border"}>Pending</button>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setFilter("all")} className={filter === "all" ? "h-9 px-4 rounded-lg text-sm font-medium bg-indigo-600 text-white" : "h-9 px-4 rounded-lg text-sm font-medium bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"}>All</button>
+          <button type="button" onClick={() => setFilter("completed")} className={filter === "completed" ? "h-9 px-4 rounded-lg text-sm font-medium bg-emerald-600 text-white" : "h-9 px-4 rounded-lg text-sm font-medium bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"}>Completed</button>
+          <button type="button" onClick={() => setFilter("pending")} className={filter === "pending" ? "h-9 px-4 rounded-lg text-sm font-medium bg-amber-600 text-white" : "h-9 px-4 rounded-lg text-sm font-medium bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"}>Pending</button>
+        </div>
+        <div className="relative w-full sm:max-w-xs">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <Input placeholder="Search payments..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9 bg-white border-slate-200 rounded-lg" />
+        </div>
       </div>
-      <div className="rounded-xl border bg-white shadow-sm">
+      <div className="rounded-2xl border border-slate-200/80 bg-white overflow-hidden">
         <Table>
-          <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Invoice</TableHead><TableHead>Client</TableHead><TableHead>Method</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+          <TableHeader>
+            <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
+              <TableHead className="font-semibold">Date</TableHead>
+              <TableHead className="font-semibold">Invoice</TableHead>
+              <TableHead className="font-semibold">Client</TableHead>
+              <TableHead className="font-semibold">Method</TableHead>
+              <TableHead className="text-right font-semibold">Amount</TableHead>
+              <TableHead className="font-semibold">Status</TableHead>
+            </TableRow>
+          </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={6} className="h-24 text-center">Loading...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="h-24 text-center text-slate-500">Loading...</TableCell></TableRow>
             ) : filtered.length === 0 ? (
               <TableRow><TableCell colSpan={6} className="h-32 text-center text-slate-500">No payments found.</TableCell></TableRow>
             ) : (
               filtered.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell>{new Date(p.payment_date).toLocaleDateString()}</TableCell>
-                  <TableCell className="font-medium">{p.invoices?.invoice_number || "-"}</TableCell>
-                  <TableCell>{p.invoices?.clients?.full_name || "-"}</TableCell>
-                  <TableCell>{p.payment_method || "-"}</TableCell>
-                  <TableCell className="text-right font-medium">${(p.amount || 0).toLocaleString()}</TableCell>
-                  <TableCell><span className={p.status === "Completed" ? "px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700" : "px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700"}>{p.status}</span></TableCell>
+                <TableRow key={p.id} className="hover:bg-slate-50/50">
+                  <TableCell className="text-slate-600">{new Date(p.payment_date).toLocaleDateString()}</TableCell>
+                  <TableCell className="font-medium text-slate-900">{p.invoices?.invoice_number || "-"}</TableCell>
+                  <TableCell className="text-slate-700">{p.invoices?.clients?.full_name || "-"}</TableCell>
+                  <TableCell className="text-slate-600">{p.payment_method || "-"}</TableCell>
+                  <TableCell className="text-right font-semibold text-slate-900">${(p.amount || 0).toLocaleString()}</TableCell>
+                  <TableCell><StatusBadge status={p.status} /></TableCell>
                 </TableRow>
               ))
             )}

@@ -8,7 +8,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  // Persist collapsed state in localStorage
   useEffect(() => {
     const saved = localStorage.getItem("sidebar_collapsed")
     if (saved === "true") setCollapsed(true)
@@ -18,7 +17,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     localStorage.setItem("sidebar_collapsed", String(collapsed))
   }, [collapsed])
 
-  // Close mobile menu on resize to desktop
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 1024) setMobileOpen(false)
@@ -41,7 +39,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           onDesktopSidebarToggle={() => setCollapsed(!collapsed)}
         />
         <main className="flex-1 overflow-y-auto bg-slate-50">
-          <div className="px-4 sm:px-6 lg:px-8 py-6 lg:py-8 max-w-[1600px] mx-auto w-full">
+          <div className="px-4 sm:px-6 lg:px-8 py-6 lg:py-8 max-w-[1600px] mx-auto w-full fade-in">
             {children}
           </div>
         </main>

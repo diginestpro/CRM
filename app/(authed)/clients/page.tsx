@@ -1,14 +1,14 @@
 import { createClientServer } from "@/lib/supabase/server"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Search, Mail, Phone, MapPin } from "lucide-react"
+import { Plus, Search, Mail, Phone, MapPin, Users as UsersIcon } from "lucide-react"
 import Link from "next/link"
 import { ClientRowActions } from "@/components/billing/client-row-actions"
+import { PageHeader } from "@/components/layout/page-header"
+import { EmptyState } from "@/components/ui/empty-state"
 
 export default async function ClientsPage() {
   const supabase = await createClientServer()
-  // Pull clients + count of addresses per client (cheap aggregate)
   const { data: clients, error } = await supabase
     .from("clients")
     .select("*, client_addresses(id, is_default)")
@@ -17,20 +17,23 @@ export default async function ClientsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight text-slate-900">Clients</h2>
-          <p className="text-slate-500">Manage your client relationships and contact information.</p>
+      <PageHeader
+        title="Clients"
+        description="Manage your client relationships and contact information."
+        actions={
+          <Link href="/clients/new" className="h-10 px-4 rounded-xl bg-brand-gradient text-white text-sm font-medium shadow-lg shadow-indigo-500/25 hover:opacity-90 transition-opacity inline-flex items-center gap-2">
+            <Plus className="h-4 w-4" /> Add Client
+          </Link>
+        }
+      />
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <Input placeholder="Search clients..." className="pl-9 h-10 bg-white border-slate-200 rounded-xl" />
         </div>
-        <Button asChild><Link href="/clients/new" className="flex items-center gap-2"><Plus className="h-4 w-4" /> Add Client</Link></Button>
       </div>
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input placeholder="Search clients..." className="pl-9" />
-        </div>
-      </div>
-      <div className="rounded-xl border bg-white shadow-sm">
+      {clients && clients.length > 0 ? (
+      <div className="rounded-2xl border border-slate-200/80 bg-white overflow-hidden">
         <Table>
           <TableHeader><TableRow><TableHead>Client Name</TableHead><TableHead>Company</TableHead><TableHead>Contact</TableHead><TableHead>Location</TableHead><TableHead>Addresses</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
           <TableBody>
@@ -68,6 +71,15 @@ export default async function ClientsPage() {
           </TableBody>
         </Table>
       </div>
+      ) : (
+        <EmptyState
+          icon={UsersIcon}
+          title="No clients yet"
+          description="Add your first client to start invoicing and tracking payments."
+          actionLabel="Add Client"
+          actionHref="/clients/new"
+        />
+      )}
     </div>
   )
 }
