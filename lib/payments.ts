@@ -232,8 +232,8 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
   // Use admin client so webhooks work without an authenticated session.
   const { createClientAdmin } = await import("@/lib/supabase/client")
   const supabase = createClientAdmin()
-  let invoiceId: string
-  let amount: number
+  let invoiceId: string = ""
+  let amount: number = 0
 
   if (gateway === "stripe") {
     const gw = await getPaymentGateway("stripe")
@@ -282,22 +282,26 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
     if (!verifyRes.ok) {
       const errData = await verifyRes.json().catch(() => ({}))
       throw new Error(`PayPal verification failed: ${errData.message || verifyRes.statusText}`)
-    // If invoiceId is still empty, try to resolve it using the tracker token from the URL
-    if (!invoiceId && requestUrl) {
-      const url = new URL(requestUrl)
-      const tracker = url.searchParams.get("tracker")
-      if (tracker) {
-        const { data: txn } = await supabase
-          .from("payment_transactions")
-          .select("invoice_id")
-          .eq("gateway_transaction_id", tracker)
-          .maybeSingle()
-        if (txn?.invoice_id) {
-          invoiceId = txn.invoice_id
-        }
-      }
     }
 
+    // If invoiceId is still empty, try to resolve it using the tracker token from the URL
+    if (!invoiceId && typeof requestUrl === "string" && requestUrl.length > 0) {
+      try {
+        const url = new URL(requestUrl)
+        const tracker = url.searchParams.get("tracker")
+        if (tracker) {
+          const { data: txn } = await supabase
+            .from("payment_transactions")
+            .select("invoice_id")
+            .eq("gateway_transaction_id", tracker)
+            .maybeSingle()
+          if (txn && txn.invoice_id) {
+            invoiceId = txn.invoice_id
+          }
+        }
+      } catch (e) {
+        // ignore URL parse errors
+      }
     }
 
     const verifyData = await verifyRes.json()
