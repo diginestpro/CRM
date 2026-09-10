@@ -396,10 +396,20 @@ Amount: ${formatMoney(invoice.total_amount, currency)}
 Due: ${invoice.due_date || "Upon receipt"}
 Pay: ${payLink}`
 
+  // The `from_email` we store in email_queue is the ACTUAL SMTP
+  // envelope sender (smtp_settings.from_email), not the company's
+  // general contact email. We populate it here from `getSmtpSettings`
+  // so the Email Queue UI shows the real sender that recipients see
+  // in their inbox. If SMTP is not configured we fall back to the
+  // company contact address (purely a display fallback; SMTP send
+  // will fail and the row will be marked 'failed' with a clear
+  // "SMTP not configured" last_error).
+  const invSmtp = await getSmtpSettings(companyId)
+
   return enqueueEmail({
     company_id: companyId,
     to_email: client.email,
-    from_email: company?.email,
+    from_email: invSmtp?.from_email || company?.email,
     subject: `Invoice ${invoice.invoice_number} from ${company.name}`,
     body_html: html,
     body_text: text,
@@ -451,10 +461,14 @@ export async function sendReceiptEmail(companyId: string, invoiceId: string): Pr
   const fromBlock = await loadFromBlock(supabase, invoice)
 
   const html = buildEmailWrapper(company, content, { fromBlock })
+  // See sendInvoiceEmail — use the SMTP envelope sender (smtp_settings.from_email)
+  // as the queue's `from_email` so the admin Email Queue UI shows the real sender.
+  const recSmtp = await getSmtpSettings(companyId)
+
   return enqueueEmail({
     company_id: companyId,
     to_email: client.email,
-    from_email: company?.email,
+    from_email: recSmtp?.from_email || company?.email,
     subject: `Payment received - ${invoice.invoice_number}`,
     body_html: html,
     body_text: `Payment of ${formatMoney(invoice.amount_paid, currency)} received for invoice ${invoice.invoice_number}.`,
@@ -503,10 +517,14 @@ export async function sendOverdueReminder(companyId: string, invoiceId: string):
   const fromBlock = await loadFromBlock(supabase, invoice)
 
   const html = buildEmailWrapper(company, content, { fromBlock })
+  // See sendInvoiceEmail — use the SMTP envelope sender (smtp_settings.from_email)
+  // as the queue's `from_email` so the admin Email Queue UI shows the real sender.
+  const odSmtp = await getSmtpSettings(companyId)
+
   return enqueueEmail({
     company_id: companyId,
     to_email: client.email,
-    from_email: company?.email,
+    from_email: odSmtp?.from_email || company?.email,
     subject: `Overdue: Invoice ${invoice.invoice_number}`,
     body_html: html,
     body_text: `Invoice ${invoice.invoice_number} is overdue. Outstanding: ${formatMoney(balance, currency)}.`,
@@ -575,8 +593,11 @@ export async function enqueueEmail(args: EnqueueEmailArgs): Promise<SendEmailRes
     .single()
 
   if (insertErr || !row) {
+    console.error("[enqueueEmail] INSERT failed:", insertErr?.message, insertErr)
     return { ok: false, error: insertErr?.message || "Failed to enqueue email" }
   }
+
+  console.log("[enqueueEmail] queued", { queueId: row.id, to: args.to_email, subject: args.subject })
 
   if (!args.scheduled_for) {
     return await sendQueueRow(row.id)
