@@ -93,6 +93,24 @@ export default function InvoiceForm({ initialData, invoiceId, isEdit = false }: 
       if (defaultOffice) {
         setSelectedCompanyAddressId(defaultOffice.id)
       }
+
+      // Auto-fill the invoice number for NEW invoices using the
+      // company's running sequence (INV-{YEAR}-{SEQ}). We only set this
+      // on create (no initialData) so existing invoice numbers stay
+      // intact when editing.
+      if (!initialData) {
+        try {
+          const numRes = await fetch("/api/invoices/next-number")
+          if (numRes.ok) {
+            const numData = await numRes.json()
+            if (numData?.success && numData?.number) {
+              setValue("invoice_number", numData.number)
+            }
+          }
+        } catch {
+          // Non-fatal: user can still type the invoice number manually.
+        }
+      }
     }
     loadData()
   }, [])
@@ -105,13 +123,24 @@ export default function InvoiceForm({ initialData, invoiceId, isEdit = false }: 
       if (initialData.company_address_id) {
         setSelectedCompanyAddressId(initialData.company_address_id)
       }
-      if (initialData.allowed_gateways) {
-        setInvoiceGateways(initialData.allowed_gateways)
+      // Read the per-invoice gateways from invoice_payment_methods
+      // (the form's load helper passes them through as `payment_methods`).
+      const seedGateways: string[] | undefined =
+        (initialData as any).payment_methods ||
+        (initialData as any).allowed_gateways ||
+        undefined
+      if (seedGateways && seedGateways.length > 0) {
+        setInvoiceGateways(seedGateways)
       }
-      if (initialData.allows_partial_payment !== undefined) {
-        setAllowsPartial(initialData.allows_partial_payment)
+      // Column names are plural on the invoices table.
+      if (initialData.allows_partial_payments !== undefined) {
+        setAllowsPartial(!!initialData.allows_partial_payments)
+      } else if (initialData.allows_partial_payment !== undefined) {
+        setAllowsPartial(!!initialData.allows_partial_payment)
       }
-      if (initialData.min_payment_amount) {
+      if (initialData.min_payment !== undefined && initialData.min_payment !== null) {
+        setMinPayment(String(initialData.min_payment))
+      } else if (initialData.min_payment_amount) {
         setMinPayment(String(initialData.min_payment_amount))
       }
     }
@@ -133,14 +162,25 @@ export default function InvoiceForm({ initialData, invoiceId, isEdit = false }: 
         return
       }
 
+      // Build the invoice payload. NOTE: the `invoices` table does NOT
+      // have an `allowed_gateways` column — that lives on the CLIENT.
+      // Per-invoice payment controls use pluralised names:
+      //   allows_partial_payments (not allows_partial_payment)
+      //   min_payment             (not min_payment_amount)
       const payload = {
         ...values,
         status: status,
         company_id: companyId,
-        company_address_id: selectedCompanyAddressId,
-        allowed_gateways: invoiceGateways,
-        allows_partial_payment: allowsPartial,
-        min_payment_amount: minPayment,
+        company_address_id: selectedCompanyAddressId || null,
+        allows_partial_payments: allowsPartial,
+        min_payment: minPayment === "" ? null : Number(minPayment),
+        // Strip any keys the invoices table doesn't have so we never
+        // send a 400 from a PostgREST schema-cache miss.
+        allowed_gateways: undefined,
+      }
+      // Drop undefined keys so they don't reach the wire.
+      for (const k of Object.keys(payload)) {
+        if ((payload as any)[k] === undefined) delete (payload as any)[k]
       }
 
       let result
@@ -185,6 +225,23 @@ export default function InvoiceForm({ initialData, invoiceId, isEdit = false }: 
       } else if (isEdit) {
         // Edit with zero items: clear out any old ones to stay in sync.
         await safeDelete(sb, "invoice_items", { invoice_id: result.id }, { expectAtLeastOne: false })
+      }
+
+      // Persist per-invoice payment methods (gateways). The form's
+      // invoiceGateways list lives in invoice_payment_methods, NOT on the
+      // invoices row itself. We clear & re-insert on every save so the
+      // set always matches what the user picked.
+      if (invoiceGateways.length > 0) {
+        await safeDelete(sb, "invoice_payment_methods", { invoice_id: result.id }, { expectAtLeastOne: false })
+        const pmPayload = invoiceGateways.map((g) => ({
+          invoice_id: result.id,
+          payment_method: g,
+          company_id: companyId,
+        }))
+        const { error: pmE } = await safeInsert(sb, "invoice_payment_methods", pmPayload, { expectAtLeastOne: false })
+        if (pmE) throw new Error(pmE)
+      } else if (isEdit) {
+        await safeDelete(sb, "invoice_payment_methods", { invoice_id: result.id }, { expectAtLeastOne: false })
       }
 
       if (shouldSendEmail) {
