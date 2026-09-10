@@ -4,6 +4,11 @@ import { createClientServer } from "./supabase/server"
 import { getPaymentGateway } from "./payment-gateways"
 import { sendReceiptEmail } from "./email"
 
+// Module-level holder for the SafePay tracker token extracted during
+// webhook processing. The webhook handler runs sequentially so this is
+// safe; it gets reset on every invocation.
+let safePayTrackerToken = ""
+
 async function getStripeClient() {
   const gw = await getPaymentGateway("stripe")
   if (!gw) throw new Error("Stripe is not active. Enable it in Settings -> Payment Gateways.")
@@ -229,6 +234,10 @@ export async function createPaymentSession(invoiceId: string, gateway: "stripe" 
 }
 
 export async function handlePaymentWebhook(gateway: string, payload: any, signature: string, requestUrl?: string) {
+  // Reset the per-invocation tracker holder so we never leak state
+  // between sequential webhook calls on the same module instance.
+  safePayTrackerToken = ""
+
   // Use admin client so webhooks work without an authenticated session.
   const { createClientAdmin } = await import("@/lib/supabase/client")
   const supabase = createClientAdmin()
@@ -320,10 +329,12 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
     //      or the NEW format
     //      { type: "payment.succeeded", data: { amount, metadata: { order_id }, tracker, ... } }
     let urlOrderId = ""
+    let urlTracker = ""
     if (requestUrl) {
       try {
         const u = new URL(requestUrl)
         urlOrderId = u.searchParams.get("order_id") || ""
+        urlTracker = u.searchParams.get("tracker") || ""
       } catch (e) {}
     }
 
@@ -341,6 +352,11 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
       || body?.metadata?.order_id
       || body?.order_id
       || ""
+
+    // Capture the SafePay tracker token (used as gateway_transaction_id).
+    // Prefer the URL tracker (GET redirect) over the body tracker (POST webhook).
+    const trackerFromBody = inner?.tracker || body?.tracker || ""
+    const safePayTracker = urlTracker || trackerFromBody || ""
 
     // amount is in cents (smallest currency unit) in SafePay format
     const rawAmount = inner?.amount ?? body?.amount
@@ -369,7 +385,11 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
       }
     }
 
-    console.log("[Webhook][SafePay] invoiceId:", invoiceId, "amount:", amount, "type:", body.type || body.event)
+    // Stash tracker for the dedupe + insert below. We attach it to the
+    // module-level function via a closure variable.
+    safePayTrackerToken = safePayTracker
+
+    console.log("[Webhook][SafePay] invoiceId:", invoiceId, "amount:", amount, "tracker:", safePayTracker, "type:", body.type || body.event)
   } else {
     throw new Error("Unknown gateway")
   }
@@ -377,21 +397,21 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
   if (!invoiceId) throw new Error("Invoice ID not found in webhook payload")
 
   // Idempotency: SafePay may fire the webhook (browser GET + server POST) twice.
-  // Skip if we already processed this invoice as completed.
+  // Prefer the SafePay tracker token (if available) as the dedupe key,
+  // otherwise fall back to the invoiceId.
+  const dedupeKey = safePayTrackerToken || invoiceId
   const { data: existingTxn } = await supabase
     .from("payment_transactions")
     .select("id, status")
     .eq("invoice_id", invoiceId)
+    .eq("gateway_transaction_id", dedupeKey)
     .eq("status", "completed")
-    .not("gateway_transaction_id", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(1)
     .maybeSingle()
 
-  const { data: invoice } = await supabase.from("invoices").select("total_amount, currency_code, status").eq("id", invoiceId).single()
+  const { data: invoice } = await supabase.from("invoices").select("total_amount, currency_code, status, company_id").eq("id", invoiceId).maybeSingle()
 
   if (existingTxn) {
-    console.log("[Webhook][SafePay] already processed, skipping invoice", invoiceId)
+    console.log("[Webhook][SafePay] already processed (dedupeKey=", dedupeKey, "), skipping invoice", invoiceId)
     return { success: true, duplicate: true, invoice_id: invoiceId }
   }
 
@@ -413,7 +433,7 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
   const { error: txnErr } = await supabase.from("payment_transactions").insert({
     invoice_id: invoiceId,
     payment_id: payment.id,
-    gateway_transaction_id: invoiceId,
+    gateway_transaction_id: dedupeKey,
     amount: amount,
     currency_code: invoice?.currency_code || "USD",
     status: "completed",
@@ -433,16 +453,26 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
   const statusChangedToPaid = newStatus === "Paid" && invoice?.status !== "Paid"
   await supabase.from("invoices").update({ status: newStatus, amount_paid: totalPaid }).eq("id", invoiceId)
 
-  // Send receipt email when invoice becomes fully paid
-  if (statusChangedToPaid && invoiceId) {
+  // Send receipt email. We send it in two cases:
+  //   1) statusChangedToPaid: invoice just became fully Paid
+  //   2) The invoice was already Paid before this payment (rare - duplicate
+  //      or top-up). Customer should still get a receipt confirmation.
+  // We skip if it's a partial payment (status is Partial).
+  if (invoiceId && (statusChangedToPaid || (invoice?.status === "Paid" && amount > 0))) {
     try {
-      const { data: invRow } = await supabase.from("invoices").select("company_id").eq("id", invoiceId).maybeSingle()
-      if (invRow?.company_id) {
-        await sendReceiptEmail(invRow.company_id, invoiceId)
+      const companyId = invoice?.company_id
+      if (companyId) {
+        console.log("[Webhook] sending receipt email for invoice", invoiceId, "company", companyId, "amount", amount)
+        const result = await sendReceiptEmail(companyId, invoiceId)
+        console.log("[Webhook] receipt email result:", result)
+      } else {
+        console.warn("[Webhook] no company_id on invoice", invoiceId, "- skipping receipt email")
       }
-    } catch (e) {
-      console.error("[Webhook] receipt email failed:", e)
+    } catch (e: any) {
+      console.error("[Webhook] receipt email failed:", e?.message || e)
     }
+  } else {
+    console.log("[Webhook] no receipt email triggered. statusChangedToPaid=", statusChangedToPaid, "currentStatus=", invoice?.status, "amount=", amount)
   }
 
   return { success: true }
