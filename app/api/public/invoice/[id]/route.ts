@@ -47,7 +47,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
     const { data: invoice, error: invError } = await supabase
       .from("invoices")
-      .select("*, invoice_items(*)")
+      .select("*, invoice_items(*, services(name))")
       .eq("id", id)
       .maybeSingle()
 

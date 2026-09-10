@@ -48,8 +48,10 @@ export function QuotationPrintLayout({ quotation }: QuotationPrintProps) {
           {quotation.quotation_items.map((item: any) => (
             <TableRow key={item.id}>
               <TableCell className="py-4">
-                <span className="font-medium">{item.services?.name}</span>
-                {item.description && <p className="text-xs text-slate-500">{item.description}</p>}
+                <span className="font-medium">{item.services?.name || item.description || "Service"}</span>
+                {item.description && item.description !== (item.services?.name || "") && (
+                  <p className="text-xs text-slate-500">{item.description}</p>
+                )}
               </TableCell>
               <TableCell className="text-center">{item.quantity}</TableCell>
               <TableCell className="text-right">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(item.unit_price)}</TableCell>

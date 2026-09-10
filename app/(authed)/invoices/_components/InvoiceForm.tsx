@@ -153,6 +153,37 @@ export default function InvoiceForm({ initialData, invoiceId, isEdit = false }: 
         result = data
       }
 
+      // Persist line items into invoice_items. We always write a
+      // `description` (falling back to the selected service name) so
+      // the line shows up correctly on the invoice, pay page, receipt,
+      // and emails — even if the underlying service is later deleted.
+      const lineItems = (values.items || []).filter((it: any) => it.service_id || it.description)
+      if (lineItems.length > 0) {
+        const itemsPayload = lineItems.map((it: any) => {
+          const svc = services.find((s: any) => s.id === it.service_id)
+          const desc = (it.description && it.description.trim()) || svc?.name || "Service"
+          return {
+            invoice_id: result.id,
+            service_id: it.service_id || null,
+            description: desc,
+            quantity: Number(it.quantity || 1),
+            unit_price: Number(it.unit_price || 0),
+            total_amount: Number(it.quantity || 1) * Number(it.unit_price || 0),
+          }
+        })
+
+        if (isEdit) {
+          // Replace items wholesale on edit (matches QuotationForm pattern).
+          const { error: delErr } = await sb.from("invoice_items").delete().eq("invoice_id", result.id)
+          if (delErr) throw delErr
+        }
+        const { error: iE } = await sb.from("invoice_items").insert(itemsPayload)
+        if (iE) throw iE
+      } else if (isEdit) {
+        // Edit with zero items: clear out any old ones to stay in sync.
+        await sb.from("invoice_items").delete().eq("invoice_id", result.id)
+      }
+
       if (shouldSendEmail) {
         await fetch("/api/invoices/send", {
           method: "POST",

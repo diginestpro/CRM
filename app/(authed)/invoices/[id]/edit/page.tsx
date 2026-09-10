@@ -14,7 +14,7 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
   const supabase = createClientBrowser()
   const { data: invoice, error } = await supabase
     .from("invoices")
-    .select("*, invoice_items(*)")
+    .select("*, invoice_items(*, services(name, base_price))")
     .eq("id", id)
     .single()
   
