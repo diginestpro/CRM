@@ -205,7 +205,7 @@ export async function sendEmail(companyId: string, to: string, subject: string, 
     subject: subject,
     body_html: html,
     body_text: text,
-    template: opts.relatedType || null,
+    template: opts.relatedType,
     related_type: opts.relatedType || null,
     related_id: opts.relatedId || null,
   });
