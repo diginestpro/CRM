@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { createClientBrowser } from "@/lib/supabase/client"
+import { safeUpdate } from "@/lib/supabase/safe-write"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -44,24 +45,20 @@ export default function ProfileSettingsPage() {
   }, [])
 
   async function handleSave() {
-    setIsSaving(true)
-    try {
-      const sb = createClientBrowser()
-      const { error } = await sb.from("profiles").update({
-        full_name: profile.full_name,
-        phone: profile.phone,
-        avatar_url: profile.avatar_url,
-      }).eq("id", profile.id)
-      if (error) {
-        toast.error(error.message)
-      } else {
-        toast.success("Profile updated!")
-      }
-    } catch (e: any) {
-      toast.error(e.message || "Failed")
-    } finally {
-      setIsSaving(false)
+    if (!profile.id) {
+      toast.error("Profile not loaded yet. Please refresh the page.")
+      return
     }
+    setIsSaving(true)
+    const sb = createClientBrowser()
+    const { error } = await safeUpdate(sb, "profiles", {
+      full_name: profile.full_name,
+      phone: profile.phone,
+      avatar_url: profile.avatar_url,
+    }, { id: profile.id })
+    setIsSaving(false)
+    if (error) { toast.error(error); return }
+    toast.success("Profile updated!")
   }
 
   if (isLoading) {

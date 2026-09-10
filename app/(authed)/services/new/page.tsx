@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { createClientBrowser, getCurrentCompanyId } from "@/lib/supabase/client"
+import { safeInsert } from "@/lib/supabase/safe-write"
 import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 
@@ -33,19 +34,20 @@ export default function NewServicePage() {
 
   async function onSubmit(values: ServiceFormValues) {
     setIsLoading(true)
-    try {
-      const supabase = createClientBrowser()
-      const company_id = await getCurrentCompanyId(supabase)
-      if (!company_id) {
-        toast.error("Complete onboarding first")
-        router.push("/onboarding")
-        return
-      }
-      const { error } = await supabase.from("services").insert([{ ...values, company_id }])
-      if (error) toast.error(error.message)
-      else { toast.success("Service created!"); router.push("/services"); router.refresh() }
-    } catch (err) { toast.error("Error") }
-    finally { setIsLoading(false) }
+    const supabase = createClientBrowser()
+    const company_id = await getCurrentCompanyId(supabase)
+    if (!company_id) {
+      setIsLoading(false)
+      toast.error("Complete onboarding first")
+      router.push("/onboarding")
+      return
+    }
+    const { error } = await safeInsert(supabase, "services", { ...values, company_id })
+    setIsLoading(false)
+    if (error) { toast.error(error); return }
+    toast.success("Service created!")
+    router.push("/services")
+    router.refresh()
   }
 
   return (

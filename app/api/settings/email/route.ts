@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClientServer } from "@/lib/supabase/server"
+import { safeUpsert } from "@/lib/supabase/safe-write"
 
 async function resolveCompanyId(): Promise<string | null> {
   const supabase = await createClientServer()
@@ -60,9 +61,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const { error } = await supabase
-      .from("smtp_settings")
-      .upsert(row, { onConflict: "company_id" })
+    const { error } = await safeUpsert(supabase, "smtp_settings", row, { onConflict: "company_id" })
     if (error) throw error
     return NextResponse.json({ success: true })
   } catch (e: any) {

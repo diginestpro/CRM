@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { createClientBrowser, getCurrentCompanyId } from "@/lib/supabase/client"
+import { safeUpdate, safeInsert, safeUpsert } from "@/lib/supabase/safe-write"
 import Link from "next/link"
 
 export const clientSchema = z.object({
@@ -103,21 +104,26 @@ export default function ClientForm({ initialData, clientId, isEdit = false }: Cl
 
       let result
       if (isEdit && clientId) {
-        const { data, error } = await supabase.from("clients").update(payload).eq("id", clientId).select().single()
-        if (error) throw error
-        result = data
+        const { data, error } = await safeUpdate(supabase, "clients", payload, { id: clientId })
+        if (error) throw new Error(error)
+        if (!data || !data[0]) throw new Error("Client was not saved. Please refresh and try again.")
+        result = data[0]
       } else {
-        const { data, error } = await supabase.from("clients").insert([ { ...payload, company_id: companyId, is_archived: false } ]).select().single()
-        if (error) throw error
-        result = data
+        const { data, error } = await safeInsert(supabase, "clients", { ...payload, company_id: companyId, is_archived: false })
+        if (error) throw new Error(error)
+        if (!data || !data[0]) throw new Error("Client was not created. Please refresh and try again.")
+        result = data[0]
       }
 
       if (result?.id && address && Object.values(address).some(v => v && String(v).trim() !== "")) {
-        const { error: addrErr } = await supabase.from("client_addresses").upsert({
-          client_id: result.id,
-          ...address,
-          is_default: true,
-        }, { onConflict: "client_id" })
+        // The default client_addresses row is allowed to be absent (some
+        // clients skip the address), so don't enforce expectAtLeastOne.
+        const { error: addrErr } = await safeUpsert(
+          supabase,
+          "client_addresses",
+          { client_id: result.id, ...address, is_default: true },
+          { onConflict: "client_id", expectAtLeastOne: false }
+        )
         if (addrErr) console.error("Address error:", addrErr)
       }
 

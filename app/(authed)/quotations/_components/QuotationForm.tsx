@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { createClientBrowser, getCurrentCompanyId } from "@/lib/supabase/client"
+import { safeUpdate, safeInsert, safeDelete } from "@/lib/supabase/safe-write"
 import { BillingItems } from "@/components/billing/billing-items"
 
 const schema = z.object({
@@ -84,19 +85,20 @@ export default function QuotationForm({ initialData, quotationId, isEdit = false
       let qId = quotationId
 
       if (isEdit && quotationId) {
-        const { error } = await sb.from("quotations").update({
+        const { error } = await safeUpdate(sb, "quotations", {
           client_id: v.client_id, quotation_number: v.quotation_number, status: v.status,
           total_amount: total, company_address_id: officeId,
-        }).eq("id", quotationId)
-        if (error) throw error
+        }, { id: quotationId })
+        if (error) throw new Error(error)
       } else {
-        const { data, error } = await sb.from("quotations").insert({
+        const { data, error } = await safeInsert(sb, "quotations", {
           company_id, client_id: v.client_id, quotation_number: v.quotation_number, status: v.status,
           issue_date: new Date().toISOString().split("T")[0], total_amount: total,
           company_address_id: officeId,
-        }).select().single()
-        if (error) throw error
-        qId = data.id
+        })
+        if (error) throw new Error(error)
+        if (!data || !data[0]) throw new Error("Quotation was not created. Please refresh and try again.")
+        qId = data[0].id
       }
 
       const itemsPayload = v.items.map(i => ({
@@ -104,10 +106,11 @@ export default function QuotationForm({ initialData, quotationId, isEdit = false
       }))
 
       if (isEdit) {
-        await sb.from("quotation_items").delete().eq("quotation_id", qId)
+        // Allow 0 rows (e.g. quotation had no items previously).
+        await safeDelete(sb, "quotation_items", { quotation_id: qId }, { expectAtLeastOne: false })
       }
-      const { error: iE } = await sb.from("quotation_items").insert(itemsPayload)
-      if (iE) throw iE
+      const { error: iE } = await safeInsert(sb, "quotation_items", itemsPayload)
+      if (iE) throw new Error(iE)
 
       toast.success(isEdit ? "Quotation updated!" : "Quotation created!")
       router.push(`/quotations/${qId}`)

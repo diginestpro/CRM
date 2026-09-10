@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { createClientBrowser } from "@/lib/supabase/client"
+import { safeUpdate } from "@/lib/supabase/safe-write"
 import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 
@@ -37,7 +38,7 @@ export default function EditServicePage({ params }: { params: Promise<{ id: stri
       const supabase = createClientBrowser()
       const { data: service, error } = await supabase.from("services").select("*").eq("id", id).single()
       if (error) {
-        toast.error("Error loading service")
+        toast.error("Error loading service: " + error.message)
       } else if (service) {
         Object.entries(service).forEach(([key, value]) => {
           setValue(key as any, value)
@@ -50,13 +51,13 @@ export default function EditServicePage({ params }: { params: Promise<{ id: stri
 
   async function onSubmit(values: ServiceFormValues) {
     setIsLoading(true)
-    try {
-      const supabase = createClientBrowser()
-      const { error } = await supabase.from("services").update(values).eq("id", id)
-      if (error) toast.error(error.message)
-      else { toast.success("Service updated!"); router.push("/services"); router.refresh() }
-    } catch (err) { toast.error("Error") }
-    finally { setIsLoading(false) }
+    const supabase = createClientBrowser()
+    const { data, error } = await safeUpdate(supabase, "services", values, { id })
+    setIsLoading(false)
+    if (error) { toast.error(error); return }
+    toast.success("Service updated!")
+    router.push("/services")
+    router.refresh()
   }
 
   if (isFetching) return <div className="p-6 text-center">Loading service details...</div>

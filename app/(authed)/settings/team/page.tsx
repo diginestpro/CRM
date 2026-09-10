@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { createClientBrowser } from "@/lib/supabase/client"
+import { safeUpdate } from "@/lib/supabase/safe-write"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -105,15 +106,11 @@ export default function TeamSettingsPage() {
 
   async function handleRemove(memberId: string) {
     if (!confirm("Are you sure you want to remove this member?")) return
-    try {
-      const sb = createClientBrowser()
-      const { error } = await sb.from("profiles").update({ company_id: null }).eq("id", memberId)
-      if (error) throw error
-      toast.success("Member removed")
-      loadMembers()
-    } catch (e: any) {
-      toast.error(e.message || "Failed")
-    }
+    const sb = createClientBrowser()
+    const { error } = await safeUpdate(sb, "profiles", { company_id: null }, { id: memberId })
+    if (error) { toast.error(error); return }
+    toast.success("Member removed")
+    loadMembers()
   }
 
   if (isLoading) {

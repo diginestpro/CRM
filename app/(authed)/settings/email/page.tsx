@@ -30,7 +30,9 @@ export default function EmailSettingsPage() {
       try {
         const res = await fetch("/api/settings/email")
         const data = await res.json()
-        if (data.success && data.settings) {
+        if (!res.ok) {
+          toast.error("Could not load SMTP settings: " + (data?.error || res.statusText || "Unknown error"))
+        } else if (data.success && data.settings) {
           const s = data.settings
           setSmtp({
             host: s.host || "",
@@ -42,7 +44,10 @@ export default function EmailSettingsPage() {
             encryption: s.encryption || "tls",
           })
         }
-      } catch (e) { console.error(e) }
+      } catch (e: any) {
+        console.error("[EmailSettings] load error:", e)
+        toast.error("Failed to load SMTP settings: " + (e?.message || "Unknown error"))
+      }
       finally { setIsLoading(false) }
     }
     load()
@@ -57,10 +62,12 @@ export default function EmailSettingsPage() {
         body: JSON.stringify(smtp),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Failed")
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to save")
+      }
       toast.success("SMTP settings saved!")
     } catch (e: any) {
-      toast.error(e.message || "Failed")
+      toast.error(e.message || "Failed to save SMTP settings")
     } finally {
       setIsSaving(false)
     }

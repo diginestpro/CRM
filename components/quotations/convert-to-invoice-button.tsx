@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { createClientBrowser } from '@/lib/supabase/client'
+import { safeInsert } from '@/lib/supabase/safe-write'
 import { Loader2 } from 'lucide-react'
 
 export function ConvertToInvoiceButton({ quotation }: { quotation: any }) {
@@ -19,7 +20,7 @@ export function ConvertToInvoiceButton({ quotation }: { quotation: any }) {
       // 1. Create Invoice (carry the chosen From-office and other key
       //    fields from the quotation so the conversion preserves the
       //    user's selection).
-      const { data: invoice, error: invE } = await sb.from('invoices').insert({
+      const { data: invRows, error: invE } = await safeInsert(sb, 'invoices', {
         client_id: quotation.client_id,
         invoice_number: `INV-${quotation.quote_number.replace('QT-', '')}`,
         status: 'Draft',
@@ -27,9 +28,10 @@ export function ConvertToInvoiceButton({ quotation }: { quotation: any }) {
         company_id: quotation.company_id,
         company_address_id: quotation.company_address_id || null,
         selected_address_id: quotation.selected_address_id || null,
-      }).select().single()
-
-      if (invE) throw invE
+      })
+      if (invE) throw new Error(invE)
+      const invoice = invRows?.[0]
+      if (!invoice) throw new Error('Invoice was not created. Please refresh and try again.')
 
       // 2. Copy Items
       const itemsToInsert = quotation.quotation_items.map((item: any) => ({
@@ -40,8 +42,8 @@ export function ConvertToInvoiceButton({ quotation }: { quotation: any }) {
         description: item.description,
       }))
 
-      const { error: itemE } = await sb.from('invoice_items').insert(itemsToInsert)
-      if (itemE) throw itemE
+      const { error: itemE } = await safeInsert(sb, 'invoice_items', itemsToInsert)
+      if (itemE) throw new Error(itemE)
 
       toast.success('Converted to Invoice!')
       router.push(`/invoices/${invoice.id}`)

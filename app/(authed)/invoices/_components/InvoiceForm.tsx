@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { toast } from "sonner"
 import { createClientBrowser, getCurrentCompanyId } from "@/lib/supabase/client"
+import { safeUpdate, safeInsert, safeDelete } from "@/lib/supabase/safe-write"
 import { Save, Send } from "lucide-react"
 import { BillingItems } from "@/components/billing/billing-items"
 import { calculateInvoiceTotals } from "@/lib/invoice-calc"
@@ -144,13 +145,15 @@ export default function InvoiceForm({ initialData, invoiceId, isEdit = false }: 
 
       let result
       if (isEdit && invoiceId) {
-        const { data, error } = await sb.from("invoices").update(payload).eq("id", invoiceId).select().single()
-        if (error) throw error
-        result = data
+        const { data, error } = await safeUpdate(sb, "invoices", payload, { id: invoiceId })
+        if (error) throw new Error(error)
+        if (!data || !data[0]) throw new Error("Invoice was not saved. Please refresh and try again.")
+        result = data[0]
       } else {
-        const { data, error } = await sb.from("invoices").insert([ payload ]).select().single()
-        if (error) throw error
-        result = data
+        const { data, error } = await safeInsert(sb, "invoices", payload)
+        if (error) throw new Error(error)
+        if (!data || !data[0]) throw new Error("Invoice was not created. Please refresh and try again.")
+        result = data[0]
       }
 
       // Persist line items into invoice_items. We always write a
@@ -174,14 +177,14 @@ export default function InvoiceForm({ initialData, invoiceId, isEdit = false }: 
 
         if (isEdit) {
           // Replace items wholesale on edit (matches QuotationForm pattern).
-          const { error: delErr } = await sb.from("invoice_items").delete().eq("invoice_id", result.id)
-          if (delErr) throw delErr
+          // Allow 0 rows (e.g. invoice had no items previously).
+          await safeDelete(sb, "invoice_items", { invoice_id: result.id }, { expectAtLeastOne: false })
         }
-        const { error: iE } = await sb.from("invoice_items").insert(itemsPayload)
-        if (iE) throw iE
+        const { error: iE } = await safeInsert(sb, "invoice_items", itemsPayload)
+        if (iE) throw new Error(iE)
       } else if (isEdit) {
         // Edit with zero items: clear out any old ones to stay in sync.
-        await sb.from("invoice_items").delete().eq("invoice_id", result.id)
+        await safeDelete(sb, "invoice_items", { invoice_id: result.id }, { expectAtLeastOne: false })
       }
 
       if (shouldSendEmail) {
