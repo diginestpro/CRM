@@ -41,6 +41,25 @@ const statusIcon: Record<string, any> = {
   failed: AlertCircle,
 }
 
+// Stable, locale-fixed date formatter. Use this everywhere instead of
+// `new Date(x).toLocaleString()` so server-rendered HTML matches the
+// client (otherwise Next.js throws a hydration mismatch).
+function formatDate(iso: string): string {
+  if (!iso) return ""
+  const d = new Date(iso)
+  // Use en-GB + UTC so the same string is produced in Node and Chrome
+  // regardless of the user's locale or browser timezone setting.
+  return d.toLocaleString("en-GB", {
+    timeZone: "UTC",
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }) + " UTC"
+}
+
 export function EmailsQueueClient({
   rows,
   initialStatus,
@@ -197,7 +216,7 @@ export function EmailsQueueClient({
                           </>
                         )}
                         {" · "}
-                        {new Date(row.created_at).toLocaleString()}
+                        {formatDate(row.created_at)}
                       </p>
                       {row.last_error && (
                         <p className="text-xs text-rose-600 mt-1 truncate" title={row.last_error}>
@@ -262,7 +281,7 @@ export function EmailsQueueClient({
                     </>
                   )}
                 </p>
-                <p>Created {new Date(preview.created_at).toLocaleString()}</p>
+                <p>Created {formatDate(preview.created_at)}</p>
                 {preview.last_error && (
                   <p className="text-rose-600 break-words">{preview.last_error}</p>
                 )}

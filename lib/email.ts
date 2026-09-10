@@ -199,68 +199,17 @@ async function getAppUrl(companyId?: string): Promise<string> {
 }
 
 export async function sendEmail(companyId: string, to: string, subject: string, html: string, text: string, opts: { relatedType?: string; relatedId?: string } = {}): Promise<SendEmailResult> {
-  const smtp = await getSmtpSettings(companyId)
-  if (!smtp || !smtp.host || !smtp.from_email) {
-    return { ok: false, error: "SMTP not configured for this company" }
-  }
-
-  try {
-    const encryption = String(smtp.encryption || "tls").toLowerCase()
-    const transporter = nodemailer.createTransport({
-      host: smtp.host,
-      port: smtp.port,
-      secure: encryption === "ssl",
-      auth: smtp.username ? { user: smtp.username, pass: smtp.password || "" } : undefined,
-      tls: { rejectUnauthorized: false },
-      connectionTimeout: 15000,
-    })
-
-    const info = await transporter.sendMail({
-      from: `"${smtp.from_name || process.env.NEXT_PUBLIC_BRAND_NAME || "DigiNest Solutions"}" <${smtp.from_email}>`,
-      to,
-      subject,
-      text,
-      html,
-    })
-
-    try {
-      const supabase = createClientAdmin()
-      await supabase.from("email_log").insert({
-        company_id: companyId,
-        to_email: to,
-        from_email: smtp.from_email,
-        subject,
-        body: text.slice(0, 1000),
-        template: opts.relatedType || "general",
-        related_type: opts.relatedType,
-        related_id: opts.relatedId,
-        status: "sent",
-      })
-    } catch (e) {
-      console.error("[sendEmail] log error:", e)
-    }
-
-    return { ok: true, messageId: info.messageId }
-  } catch (e: any) {
-    console.error("[sendEmail] error:", e)
-    try {
-      const supabase = createClientAdmin()
-      await supabase.from("email_log").insert({
-        company_id: companyId,
-        to_email: to,
-        from_email: smtp.from_email,
-        subject,
-        template: opts.relatedType,
-        related_type: opts.relatedType,
-        related_id: opts.relatedId,
-        status: "failed",
-        error: String(e.message || e).slice(0, 500),
-      })
-    } catch {}
-    return { ok: false, error: e.message || "SMTP send failed" }
-  }
+  return enqueueEmail({
+    company_id: companyId,
+    to_email: to,
+    subject: subject,
+    body_html: html,
+    body_text: text,
+    template: opts.relatedType || null,
+    related_type: opts.relatedType || null,
+    related_id: opts.relatedId || null,
+  });
 }
-
 
 export async function sendInvoiceEmail(companyId: string, invoiceId: string): Promise<SendEmailResult> {
   const supabase = createClientAdmin()
@@ -571,39 +520,51 @@ export interface EnqueueEmailArgs {
  * need to change.
  */
 export async function enqueueEmail(args: EnqueueEmailArgs): Promise<SendEmailResult> {
-  const supabase = createClientAdmin()
+    console.log(`[enqueueEmail] Starting enqueue for:`, { to: args.to_email, subject: args.subject });
+    const supabase = createClientAdmin()
 
-  const { data: row, error: insertErr } = await supabase
-    .from("email_queue")
-    .insert({
-      company_id: args.company_id,
-      to_email: args.to_email,
-      from_email: args.from_email || null,
-      subject: args.subject,
-      body_html: args.body_html,
-      body_text: args.body_text,
-      template: args.template || "general",
-      related_type: args.related_type || null,
-      related_id: args.related_id || null,
-      status: "pending",
-      attempts: 0,
-      scheduled_for: args.scheduled_for || null,
-    })
-    .select("id")
-    .single()
+    const { data: row, error: insertErr } = await supabase
+      .from("email_queue")
+      .insert({
+        company_id: args.company_id,
+        to_email: args.to_email,
+        from_email: args.from_email || null,
+        subject: args.subject,
+        body_html: args.body_html,
+        body_text: args.body_text,
+        template: args.template || "general",
+        related_type: args.related_type || null,
+        related_id: args.related_id || null,
+        status: "pending",
+        attempts: 0,
+        scheduled_for: args.scheduled_for || null,
+      })
+      .select("id")
+      .single()
 
-  if (insertErr || !row) {
-    console.error("[enqueueEmail] INSERT failed:", insertErr?.message, insertErr)
-    return { ok: false, error: insertErr?.message || "Failed to enqueue email" }
-  }
+    if (insertErr || !row) {
+      console.error("[enqueueEmail] INSERT failed:", insertErr?.message, insertErr)
+      return { ok: false, error: insertErr?.message || "Failed to enqueue email" }
+    }
 
-  console.log("[enqueueEmail] queued", { queueId: row.id, to: args.to_email, subject: args.subject })
+    console.log(`[enqueueEmail] successfully inserted row: ${row.id}`);
 
-  if (!args.scheduled_for) {
-    return await sendQueueRow(row.id)
-  }
-  return { ok: true, queued: true, queueId: row.id }
+    if (!args.scheduled_for) {
+      console.log(`[enqueueEmail] attempting immediate send for: ${row.id}`);
+      try {
+        const result = await sendQueueRow(row.id);
+        console.log(`[enqueueEmail] sendQueueRow result for ${row.id}:`, result);
+        return result;
+      } catch (e: any) {
+        console.error(`[enqueueEmail] sendQueueRow crashed for ${row.id}:`, e);
+        return { ok: false, error: `Queue processor crashed: ${e.message}` };
+      }
+    }
+    
+    console.log(`[enqueueEmail] email scheduled for later: ${args.scheduled_for}`);
+    return { ok: true, queued: true, queueId: row.id }
 }
+
 
 /**
  * Attempt to send a queue row by id. Marks it 'sending', runs SMTP,
@@ -612,97 +573,116 @@ export async function enqueueEmail(args: EnqueueEmailArgs): Promise<SendEmailRes
  * Exposed so the admin UI can re-send pending / failed rows.
  */
 export async function sendQueueRow(queueId: string): Promise<SendEmailResult> {
-  const supabase = createClientAdmin()
+    console.log(`[sendQueueRow] Processing queueId: ${queueId}`);
+    const supabase = createClientAdmin()
 
-  const { data: row, error: loadErr } = await supabase
-    .from("email_queue")
-    .select("*")
-    .eq("id", queueId)
-    .maybeSingle()
-
-  if (loadErr || !row) {
-    return { ok: false, error: loadErr?.message || "Queue row not found" }
-  }
-
-  if (row.status === "sent") {
-    return { ok: false, error: "Email already sent" }
-  }
-
-  await supabase
-    .from("email_queue")
-    .update({
-      status: "sending",
-      attempts: (row.attempts || 0) + 1,
-      last_error: null,
-    })
-    .eq("id", queueId)
-
-  const smtp = await getSmtpSettings(row.company_id)
-  if (!smtp || !smtp.host || !smtp.from_email) {
-    const msg = "SMTP not configured for this company"
-    await supabase
+    const { data: row, error: loadErr } = await supabase
       .from("email_queue")
-      .update({ status: "failed", last_error: msg })
+      .select("*")
       .eq("id", queueId)
-    return { ok: false, error: msg }
-  }
+      .maybeSingle()
 
-  try {
-    const encryption = String(smtp.encryption || "tls").toLowerCase()
-    const transporter = nodemailer.createTransport({
-      host: smtp.host,
-      port: smtp.port,
-      secure: encryption === "ssl",
-      auth: smtp.username ? { user: smtp.username, pass: smtp.password || "" } : undefined,
-      tls: { rejectUnauthorized: false },
-      connectionTimeout: 15000,
-    })
-    const info = await transporter.sendMail({
-      from: `"${smtp.from_name || "DigiNest Solutions"}" <${smtp.from_email}>`,
-      to: row.to_email,
-      subject: row.subject,
-      text: row.body_text,
-      html: row.body_html,
-    })
+    if (loadErr || !row) {
+      console.error(`[sendQueueRow] Load error for ${queueId}:`, loadErr?.message);
+      return { ok: false, error: loadErr?.message || "Queue row not found" }
+    }
 
-    await Promise.all([
-      supabase
-        .from("email_queue")
-        .update({ status: "sent", sent_at: new Date().toISOString(), last_error: null })
-        .eq("id", queueId),
-      supabase.from("email_log").insert({
-        company_id: row.company_id,
-        to_email: row.to_email,
-        from_email: smtp.from_email,
-        subject: row.subject,
-        body: (row.body_text || "").slice(0, 1000),
-        template: row.template || null,
-        related_type: row.related_type || null,
-        related_id: row.related_id || null,
-        status: "sent",
-      }),
-    ])
+    if (row.status === "sent") {
+      console.log(`[sendQueueRow] Row ${queueId} already sent.`);
+      return { ok: false, error: "Email already sent" }
+    }
 
-    return { ok: true, messageId: info.messageId, queueId }
-  } catch (e: any) {
-    const msg = String(e.message || e).slice(0, 500)
-    await supabase
+    console.log(`[sendQueueRow] Updating status to 'sending' for ${queueId}...`);
+    const { error: updateErr } = await supabase
       .from("email_queue")
-      .update({ status: "failed", last_error: msg })
-      .eq("id", queueId)
-    try {
-      await supabase.from("email_log").insert({
-        company_id: row.company_id,
-        to_email: row.to_email,
-        from_email: smtp.from_email,
-        subject: row.subject,
-        template: row.template || null,
-        related_type: row.related_type || null,
-        related_id: row.related_id || null,
-        status: "failed",
-        error: msg,
+      .update({
+        status: "sending",
+        attempts: (row.attempts || 0) + 1,
+        last_error: null,
       })
-    } catch {}
-    return { ok: false, error: msg }
-  }
+      .eq("id", queueId);
+
+    if (updateErr) {
+      console.error(`[sendQueueRow] Update to 'sending' failed for ${queueId}:`, updateErr.message);
+      return { ok: false, error: `Failed to mark as sending: ${updateErr.message}` };
+    }
+
+    const smtp = await getSmtpSettings(row.company_id)
+    if (!smtp || !smtp.host || !smtp.from_email) {
+      const msg = "SMTP not configured for this company"
+      console.error(`[sendQueueRow] ${msg} for company ${row.company_id}`);
+      await supabase
+        .from("email_queue")
+        .update({ status: "failed", last_error: msg })
+        .eq("id", queueId)
+      return { ok: false, error: msg }
+    }
+
+    if (smtp.username && smtp.username.includes("@") && smtp.username !== smtp.from_email) {
+      console.warn(`[sendQueueRow] WARNING: SMTP username (${smtp.username}) differs from from_email (${smtp.from_email}). Some servers will silently drop these emails.`);
+    }
+
+    try {
+      console.log(`[sendQueueRow] Sending SMTP mail for ${queueId} via ${smtp.host}...`);
+      const encryption = String(smtp.encryption || "tls").toLowerCase()
+      const transporter = nodemailer.createTransport({
+        host: smtp.host,
+        port: smtp.port,
+        secure: encryption === "ssl",
+        auth: smtp.username ? { user: smtp.username, pass: smtp.password || "" } : undefined,
+        tls: { rejectUnauthorized: false },
+        connectionTimeout: 15000,
+      })
+      const info = await transporter.sendMail({
+        from: `"${smtp.from_name || "DigiNest Solutions"}" <${smtp.from_email}>`,
+        to: row.to_email,
+        subject: row.subject,
+        text: row.body_text,
+        html: row.body_html,
+      })
+
+      console.log(`[sendQueueRow] SMTP response for ${queueId}:`, JSON.stringify(info, null, 2));
+      console.log(`[sendQueueRow] Mail sent successfully for ${queueId}. MessageId: ${info.messageId}`);
+
+      await Promise.all([
+        supabase
+          .from("email_queue")
+          .update({ status: "sent", sent_at: new Date().toISOString(), last_error: null })
+          .eq("id", queueId),
+        supabase.from("email_log").insert({
+          company_id: row.company_id,
+          to_email: row.to_email,
+          from_email: smtp.from_email,
+          subject: row.subject,
+          body: (row.body_text || "").slice(0, 1000),
+          template: row.template || null,
+          related_type: row.related_type || null,
+          related_id: row.related_id || null,
+          status: "sent",
+        }),
+      ])
+
+      return { ok: true, messageId: info.messageId, queueId }
+    } catch (e: any) {
+      const msg = String(e.message || e).slice(0, 500)
+      console.error(`[sendQueueRow] SMTP failure for ${queueId}:`, msg);
+      await supabase
+        .from("email_queue")
+        .update({ status: "failed", last_error: msg })
+        .eq("id", queueId)
+      try {
+        await supabase.from("email_log").insert({
+          company_id: row.company_id,
+          to_email: row.to_email,
+          from_email: smtp.from_email,
+          subject: row.subject,
+          template: row.template || null,
+          related_type: row.related_type || null,
+          related_id: row.related_id || null,
+          status: "failed",
+          error: msg,
+        })
+      } catch {}
+      return { ok: false, error: msg }
+    }
 }

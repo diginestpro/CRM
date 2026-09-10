@@ -72,7 +72,7 @@ export default async function ActivityPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-slate-900">{a.description}</p>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    by {a.user?.full_name || "System"} • {new Date(a.created_at).toLocaleString()}
+                    by {a.user?.full_name || "System"} • {new Date(a.created_at).toLocaleString("en-GB", { timeZone: "UTC", year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })} UTC
                   </p>
                 </div>
               </div>

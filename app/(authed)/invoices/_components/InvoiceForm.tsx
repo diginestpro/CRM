@@ -280,9 +280,8 @@ export default function InvoiceForm({ initialData, invoiceId, isEdit = false }: 
       }
 
       if (shouldSendEmail) {
-        await fetch("/api/invoices/send", {
+        await fetch(`/api/invoices/${result.id}/send`, {
           method: "POST",
-          body: JSON.stringify({ invoiceId: result.id })
         })
       }
 
