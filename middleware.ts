@@ -75,6 +75,7 @@ export async function middleware(request: NextRequest) {
                            request.nextUrl.pathname.startsWith('/payments') ||
                            request.nextUrl.pathname.startsWith('/reports') ||
                            request.nextUrl.pathname.startsWith('/settings') ||
+                           request.nextUrl.pathname.startsWith('/emails') ||
                            request.nextUrl.pathname.startsWith('/onboarding')
 
   if (isProtectedRoute && !user) {

@@ -166,6 +166,12 @@ export interface SendEmailResult {
   ok: boolean
   error?: string
   messageId?: string
+  /** Set by enqueueEmail when scheduled_for is set: the row stayed
+   *  in 'pending' state and the SMTP send was deferred. */
+  queued?: boolean
+  /** Set by enqueueEmail / sendQueueRow: the email_queue.id row that
+   *  was inserted / re-sent. Useful for the admin queue UI. */
+  queueId?: string
 }
 
 async function getAppUrl(companyId?: string): Promise<string> {
@@ -390,9 +396,16 @@ Amount: ${formatMoney(invoice.total_amount, currency)}
 Due: ${invoice.due_date || "Upon receipt"}
 Pay: ${payLink}`
 
-  return sendEmail(companyId, client.email, `Invoice ${invoice.invoice_number} from ${company.name}`, html, text, {
-    relatedType: "invoice",
-    relatedId: invoice.id,
+  return enqueueEmail({
+    company_id: companyId,
+    to_email: client.email,
+    from_email: company?.email,
+    subject: `Invoice ${invoice.invoice_number} from ${company.name}`,
+    body_html: html,
+    body_text: text,
+    template: "invoice",
+    related_type: "invoice",
+    related_id: invoice.id,
   })
 }
 
@@ -438,9 +451,17 @@ export async function sendReceiptEmail(companyId: string, invoiceId: string): Pr
   const fromBlock = await loadFromBlock(supabase, invoice)
 
   const html = buildEmailWrapper(company, content, { fromBlock })
-  return sendEmail(companyId, client.email, `Payment received - ${invoice.invoice_number}`, html,
-    `Payment of ${formatMoney(invoice.amount_paid, currency)} received for invoice ${invoice.invoice_number}.`,
-    { relatedType: "payment", relatedId: invoice.id })
+  return enqueueEmail({
+    company_id: companyId,
+    to_email: client.email,
+    from_email: company?.email,
+    subject: `Payment received - ${invoice.invoice_number}`,
+    body_html: html,
+    body_text: `Payment of ${formatMoney(invoice.amount_paid, currency)} received for invoice ${invoice.invoice_number}.`,
+    template: "receipt",
+    related_type: "payment",
+    related_id: invoice.id,
+  })
 }
 
 export async function sendOverdueReminder(companyId: string, invoiceId: string): Promise<SendEmailResult> {
@@ -482,7 +503,185 @@ export async function sendOverdueReminder(companyId: string, invoiceId: string):
   const fromBlock = await loadFromBlock(supabase, invoice)
 
   const html = buildEmailWrapper(company, content, { fromBlock })
-  return sendEmail(companyId, client.email, `Overdue: Invoice ${invoice.invoice_number}`, html,
-    `Invoice ${invoice.invoice_number} is overdue. Outstanding: ${formatMoney(balance, currency)}.`,
-    { relatedType: "overdue", relatedId: invoice.id })
+  return enqueueEmail({
+    company_id: companyId,
+    to_email: client.email,
+    from_email: company?.email,
+    subject: `Overdue: Invoice ${invoice.invoice_number}`,
+    body_html: html,
+    body_text: `Invoice ${invoice.invoice_number} is overdue. Outstanding: ${formatMoney(balance, currency)}.`,
+    template: "overdue",
+    related_type: "overdue",
+    related_id: invoice.id,
+  })
+}
+
+// ============================================================
+// Email queue
+//
+// Every transactional email is first recorded in
+// public.email_queue with status='pending', then the SMTP send is
+// attempted. The /admin/emails UI lets users inspect the queue,
+// manually send any pending/failed row, and see what already went
+// out.
+// ============================================================
+
+export interface EnqueueEmailArgs {
+  company_id: string
+  to_email: string
+  from_email?: string
+  subject: string
+  body_html: string
+  body_text: string
+  template?: string
+  related_type?: string | null
+  related_id?: string | null
+  /** When set, the row stays 'pending' until this time (UTC). */
+  scheduled_for?: string | null
+}
+
+/**
+ * Queue and immediately attempt to send an email.
+ *
+ * Side effects:
+ *   1. Inserts a row into email_queue with status='pending'
+ *   2. Sets status='sending' and tries the SMTP send
+ *   3. Sets status='sent' (and sent_at) on success, 'failed' (and last_error) on failure
+ *   4. Increments attempts on every send attempt
+ *
+ * Returns the same shape as sendEmail so existing callers don't
+ * need to change.
+ */
+export async function enqueueEmail(args: EnqueueEmailArgs): Promise<SendEmailResult> {
+  const supabase = createClientAdmin()
+
+  const { data: row, error: insertErr } = await supabase
+    .from("email_queue")
+    .insert({
+      company_id: args.company_id,
+      to_email: args.to_email,
+      from_email: args.from_email || null,
+      subject: args.subject,
+      body_html: args.body_html,
+      body_text: args.body_text,
+      template: args.template || "general",
+      related_type: args.related_type || null,
+      related_id: args.related_id || null,
+      status: "pending",
+      attempts: 0,
+      scheduled_for: args.scheduled_for || null,
+    })
+    .select("id")
+    .single()
+
+  if (insertErr || !row) {
+    return { ok: false, error: insertErr?.message || "Failed to enqueue email" }
+  }
+
+  if (!args.scheduled_for) {
+    return await sendQueueRow(row.id)
+  }
+  return { ok: true, queued: true, queueId: row.id }
+}
+
+/**
+ * Attempt to send a queue row by id. Marks it 'sending', runs SMTP,
+ * then 'sent' or 'failed'. Always increments `attempts`.
+ *
+ * Exposed so the admin UI can re-send pending / failed rows.
+ */
+export async function sendQueueRow(queueId: string): Promise<SendEmailResult> {
+  const supabase = createClientAdmin()
+
+  const { data: row, error: loadErr } = await supabase
+    .from("email_queue")
+    .select("*")
+    .eq("id", queueId)
+    .maybeSingle()
+
+  if (loadErr || !row) {
+    return { ok: false, error: loadErr?.message || "Queue row not found" }
+  }
+
+  if (row.status === "sent") {
+    return { ok: false, error: "Email already sent" }
+  }
+
+  await supabase
+    .from("email_queue")
+    .update({
+      status: "sending",
+      attempts: (row.attempts || 0) + 1,
+      last_error: null,
+    })
+    .eq("id", queueId)
+
+  const smtp = await getSmtpSettings(row.company_id)
+  if (!smtp || !smtp.host || !smtp.from_email) {
+    const msg = "SMTP not configured for this company"
+    await supabase
+      .from("email_queue")
+      .update({ status: "failed", last_error: msg })
+      .eq("id", queueId)
+    return { ok: false, error: msg }
+  }
+
+  try {
+    const encryption = String(smtp.encryption || "tls").toLowerCase()
+    const transporter = nodemailer.createTransport({
+      host: smtp.host,
+      port: smtp.port,
+      secure: encryption === "ssl",
+      auth: smtp.username ? { user: smtp.username, pass: smtp.password || "" } : undefined,
+      tls: { rejectUnauthorized: false },
+      connectionTimeout: 15000,
+    })
+    const info = await transporter.sendMail({
+      from: `"${smtp.from_name || "DigiNest Solutions"}" <${smtp.from_email}>`,
+      to: row.to_email,
+      subject: row.subject,
+      text: row.body_text,
+      html: row.body_html,
+    })
+
+    await Promise.all([
+      supabase
+        .from("email_queue")
+        .update({ status: "sent", sent_at: new Date().toISOString(), last_error: null })
+        .eq("id", queueId),
+      supabase.from("email_log").insert({
+        company_id: row.company_id,
+        to_email: row.to_email,
+        from_email: smtp.from_email,
+        subject: row.subject,
+        body: (row.body_text || "").slice(0, 1000),
+        template: row.template || null,
+        related_type: row.related_type || null,
+        related_id: row.related_id || null,
+        status: "sent",
+      }),
+    ])
+
+    return { ok: true, messageId: info.messageId, queueId }
+  } catch (e: any) {
+    const msg = String(e.message || e).slice(0, 500)
+    await supabase
+      .from("email_queue")
+      .update({ status: "failed", last_error: msg })
+      .eq("id", queueId)
+    try {
+      await supabase.from("email_log").insert({
+        company_id: row.company_id,
+        to_email: row.to_email,
+        from_email: smtp.from_email,
+        subject: row.subject,
+        template: row.template || null,
+        related_type: row.related_type || null,
+        related_id: row.related_id || null,
+        status: "failed",
+        error: msg,
+      })
+    } catch {}
+    return { ok: false, error: msg }
+  }
 }

@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Activity,
   Building2,
+  Mail,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { createClientBrowser } from "@/lib/supabase/client"
@@ -37,6 +38,7 @@ const salesNav: NavItem[] = [
   { name: "Payments", href: "/payments", icon: CreditCard },
 ]
 const accountNav: NavItem[] = [
+  { name: "Email Queue", href: "/emails", icon: Mail },
   { name: "Settings", href: "/settings", icon: Settings },
 ]
 
