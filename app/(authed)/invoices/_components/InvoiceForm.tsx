@@ -177,6 +177,9 @@ export default function InvoiceForm({ initialData, invoiceId, isEdit = false }: 
         client_id: values.client_id,
         invoice_number: values.invoice_number,
         status: status,
+        // `issue_date` is NOT NULL on the invoices table. Default it
+        // to today so the form never sends NULL.
+        issue_date: new Date().toISOString().slice(0, 10),
         due_date: values.due_date || null,
         notes: values.notes || null,
         tax_rate: values.tax_rate ?? 0,
@@ -184,6 +187,11 @@ export default function InvoiceForm({ initialData, invoiceId, isEdit = false }: 
         company_address_id: selectedCompanyAddressId || null,
         allows_partial_payments: allowsPartial,
         min_payment: minPayment === "" ? null : Number(minPayment),
+        currency_code: null,
+        subtotal: 0,
+        tax_amount: 0,
+        total_amount: 0,
+        amount_paid: 0,
       }
       // Strip any null/undefined keys for cleanliness.
       for (const k of Object.keys(payload)) {
