@@ -12,12 +12,12 @@ import {
   CreditCard,
   Settings,
   LogOut,
-  Sparkles,
   Package,
   X,
   ChevronLeft,
   ChevronRight,
   Activity,
+  Building2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { createClientBrowser } from "@/lib/supabase/client"
@@ -125,15 +125,11 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }: 
           collapsed ? "lg:justify-center" : "justify-between"
         )}>
           <Link href="/dashboard" className="flex items-center gap-2.5 overflow-hidden">
-            <div className="relative h-9 w-9 rounded-xl bg-brand-gradient flex items-center justify-center text-white flex-shrink-0 shadow-lg shadow-indigo-500/30">
-              <Sparkles className="h-5 w-5" />
-              <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-white" />
+            <div className="h-9 w-9 rounded-xl bg-brand-gradient flex items-center justify-center text-white flex-shrink-0 shadow-lg shadow-indigo-500/30">
+              <Building2 className="h-5 w-5" />
             </div>
             {!collapsed && (
-              <div className="flex flex-col leading-none">
-                <span className="font-bold text-[15px] text-slate-900 whitespace-nowrap">{BRAND_NAME_FALLBACK}</span>
-                <span className="text-[10px] font-medium text-slate-400 mt-0.5">CRM Workspace</span>
-              </div>
+              <span className="font-bold text-[15px] text-slate-900 whitespace-nowrap">{BRAND_NAME_FALLBACK}</span>
             )}
           </Link>
           <Button
@@ -156,17 +152,6 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }: 
           <SectionLabel label="Account" />
           <div className="space-y-1">{accountNav.map(renderItem)}</div>
 
-          {!collapsed && (
-            <div className="mt-6 rounded-2xl border border-slate-200/80 bg-gradient-to-br from-indigo-50 via-white to-violet-50 p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Sparkles className="h-4 w-4 text-indigo-500" />
-                <p className="text-xs font-semibold text-slate-800">Pro Tip</p>
-              </div>
-              <p className="text-[11px] leading-relaxed text-slate-500">
-                Use the <kbd className="px-1.5 py-0.5 bg-white rounded border border-slate-200 text-[10px] font-semibold text-slate-700">Ctrl+K</kbd> shortcut to jump anywhere.
-              </p>
-            </div>
-          )}
         </nav>
 
         <div className="hidden lg:block border-t border-slate-200/80 p-2">

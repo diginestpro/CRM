@@ -37,7 +37,7 @@ export default function QuotationForm({ initialData, quotationId, isEdit = false
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [clients, setClients] = useState<{ id: string; full_name: string }[]>([])
-  const [services, setServices] = useState<{ id: string; name: string; base_price: number }[]>([])
+  const [services, setServices] = useState<{ id: string; name: string; unit_price: number }[]>([])
   const [companyOffices, setCompanyOffices] = useState<any[]>([])
   const [selectedCompanyAddressId, setSelectedCompanyAddressId] = useState<string>("")
 
@@ -51,7 +51,7 @@ export default function QuotationForm({ initialData, quotationId, isEdit = false
       const sb = createClientBrowser()
       const [cRes, sRes, oRes] = await Promise.all([
         sb.from("clients").select("id, full_name"),
-        sb.from("services").select("id, name, base_price"),
+        sb.from("services").select("id, name, unit_price"),
         sb.from("company_addresses").select("id, address_name, street, city, state, postal_code, country, is_default").order("is_default", { ascending: false }).order("created_at", { ascending: true }),
       ])
       setClients(cRes.data || [])

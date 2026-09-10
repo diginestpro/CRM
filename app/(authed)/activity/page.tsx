@@ -5,15 +5,32 @@ import { Activity, User, FileText, ReceiptText, Users, CreditCard } from "lucide
 export default async function ActivityPage() {
   const supabase = await createClientServer()
 
-  // Fetch recent activity from activity_logs table
+  // Fetch recent activity from activity_logs. We can't PostgREST-join
+  // auth.users, so we do a second query to load matching profiles.
   let activities: any[] = []
   try {
     const { data } = await supabase
       .from("activity_logs")
-      .select("*, users:user_id(*)")
+      .select("*")
       .order("created_at", { ascending: false })
       .limit(50)
     activities = data || []
+
+    const userIds = Array.from(
+      new Set(activities.map((a: any) => a.user_id).filter(Boolean))
+    ) as string[]
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, avatar_url")
+        .in("id", userIds)
+      const byId: Record<string, any> = {}
+      ;((profiles as any[]) || []).forEach((p: any) => { byId[p.id] = p })
+      activities = activities.map((a: any) => ({
+        ...a,
+        user: byId[a.user_id] || null,
+      }))
+    }
   } catch (e) {
     console.error(e)
   }

@@ -7,6 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ArrowLeft, FileText, CheckCircle, Clock, XCircle, Printer } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { QuotationActions } from "@/components/billing/quotation-actions"
+import { QuotationPrintLayout } from "@/components/quotations/quotation-print"
+import { resolveBranding, buildLegalFooterLinks } from "@/lib/branding"
 
 export default async function QuotationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -25,6 +27,26 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
         const { data: cli } = await supabase.from("clients").select("*").eq("id", quotation.client_id).maybeSingle()
         quotation.clients = cli
       }
+
+      // Load the company + branding + legal-footer links so the
+      // printed quotation carries the same Refund Policy / Terms &
+      // Conditions links as the rest of the app.
+      if (quotation.company_id) {
+        const { data: comp } = await supabase.from("companies").select("*").eq("id", quotation.company_id).maybeSingle()
+        quotation.companies = comp
+        const { data: appSettingsRow } = await supabase
+          .from("app_settings")
+          .select("*")
+          .eq("company_id", quotation.company_id)
+          .maybeSingle()
+        quotation.branding = resolveBranding({
+          company: comp,
+          appSettings: appSettingsRow,
+          footerText: comp?.footer_text ?? null,
+        })
+        quotation.footer_links = buildLegalFooterLinks(quotation.branding)
+      }
+
       const { data: items } = await supabase.from("quotation_items").select("*").eq("quotation_id", quotation.id)
       quotation.quotation_items = items || []
 
@@ -167,6 +189,11 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
           </Card>
         </div>
       </div>
+
+      {/* Printed copy — hidden on screen, revealed by Ctrl+P.
+          Carries the Refund Policy / Terms & Conditions links via
+          the quotation.footer_links resolved above. */}
+      <QuotationPrintLayout quotation={quotation} />
     </div>
   )
 }

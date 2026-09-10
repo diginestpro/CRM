@@ -1,5 +1,6 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { BRAND_NAME_FALLBACK } from '@/lib/branding'
+import { LegalFooterLinksServer } from '@/components/billing/legal-footer-links-server'
 
 interface InvoicePrintProps {
   invoice: any
@@ -122,13 +123,10 @@ export function InvoicePrintLayout({ invoice }: InvoicePrintProps) {
 
       <div className="pt-12 text-center text-slate-400 text-sm space-y-1">
         <p>Thank you for your business!</p>
-        <p>
-          <a href="https://diginest.pro/return-refund-policy-service-based-only/" className="underline hover:text-slate-600">Refund Policy</a>
-          {" · "}
-          <a href="https://diginest.pro/" className="underline hover:text-slate-600">DigiNest.pro</a>
-          {" · "}
-          <a href="https://diginest.pro/terms-and-conditions/" className="underline hover:text-slate-600">Terms &amp; Conditions</a>
-        </p>
+        <LegalFooterLinksServer
+          branding={(invoice as any).branding}
+          overrides={(invoice as any).footer_links}
+        />
         <p>© {(invoice as any).branding?.copyright_year || new Date().getFullYear()} {(invoice as any).branding?.brand_name || BRAND_NAME_FALLBACK}</p>
       </div>
     </div>

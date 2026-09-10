@@ -8,6 +8,16 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "ProCRM - Professional Agency Management",
   description: "Manage your clients, quotations, and invoices in one place.",
+  // Next.js 16 auto-detects app/icon.svg and emits the right
+  // <link rel="icon"> tags, but we set the theme-color and apple-
+  // touch-icon explicitly so mobile browsers also pick up the
+  // brand gradient.
+  themeColor: "#6366f1",
+  manifest: "/manifest.json",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icon.svg" }],
+  },
 };
 
 export default function RootLayout({

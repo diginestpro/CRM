@@ -19,13 +19,22 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
     async function load() {
       try {
         const supabase = createClientBrowser()
-        // Fetch invoice + items + per-invoice gateways in parallel.
-        const [invRes, pmRes] = await Promise.all([
+        // Fetch invoice + per-invoice gateways in parallel. We do NOT
+        // use an embedded `invoice_items(*, services(...))` join here:
+        // PostgREST only resolves nested-resource joins when the FK
+        // exists in the schema cache, and if it ever drops the request
+        // returns HTTP 400 with an unhelpful message. The two-step
+        // version below is more resilient.
+        const [invRes, itemsRes, pmRes] = await Promise.all([
           supabase
             .from("invoices")
-            .select("*, invoice_items(*, services(name, unit_price))")
+            .select("*")
             .eq("id", id)
             .maybeSingle(),
+          supabase
+            .from("invoice_items")
+            .select("*")
+            .eq("invoice_id", id),
           supabase
             .from("invoice_payment_methods")
             .select("payment_method")
@@ -42,11 +51,26 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
           return
         }
 
-        const items = (invRes.data.invoice_items || []).map((i: any) => ({
+        // Resolve service names for the line items. The form already
+        // carries `unit_price` per line, so we only need the name.
+        const serviceIds = Array.from(
+          new Set((itemsRes.data || []).map((it: any) => it.service_id).filter(Boolean))
+        ) as string[]
+        const servicesMap: Record<string, any> = {}
+        if (serviceIds.length > 0 && !itemsRes.error) {
+          const { data: services } = await supabase
+            .from("services")
+            .select("id, name, unit_price")
+            .in("id", serviceIds)
+          ;((services as any[]) || []).forEach((s: any) => { servicesMap[s.id] = s })
+        }
+
+        const items = (itemsRes.data || []).map((i: any) => ({
           service_id: i.service_id,
           quantity: i.quantity,
           unit_price: i.unit_price,
           description: i.description,
+          service_name: servicesMap[i.service_id]?.name || null,
         }))
 
         const paymentMethods = (pmRes.data || []).map((r: any) => r.payment_method).filter(Boolean)

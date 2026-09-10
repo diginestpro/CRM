@@ -17,7 +17,7 @@ import Link from "next/link"
 const serviceSchema = z.object({
   name: z.string().min(2, "Service name is required"),
   description: z.string().optional(),
-  base_price: z.number().min(0, "Price must be positive"),
+  unit_price: z.number().min(0, "Price must be positive"),
   unit_type: z.string().min(1, "Unit is required"),
   is_active: z.boolean(),
 })
@@ -79,9 +79,9 @@ export default function EditServicePage({ params }: { params: Promise<{ id: stri
               {errors.name && <p className="text-xs text-red-500">{errors.name.message}</p>}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="base_price">Base Price *</Label>
-              <Input id="base_price" type="number" step="0.01" {...register("base_price", { valueAsNumber: true })} className={errors.base_price ? "border-red-500" : ""} />
-              {errors.base_price && <p className="text-xs text-red-500">{errors.base_price.message}</p>}
+              <Label htmlFor="unit_price">Unit Price *</Label>
+              <Input id="unit_price" type="number" step="0.01" {...register("unit_price", { valueAsNumber: true })} className={errors.unit_price ? "border-red-500" : ""} />
+              {errors.unit_price && <p className="text-xs text-red-500">{errors.unit_price.message}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="unit_type">Unit *</Label>

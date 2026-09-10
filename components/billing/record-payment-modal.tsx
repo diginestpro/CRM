@@ -44,8 +44,10 @@ export function RecordPaymentModal({ invoice, isOpen, onClose }: RecordPaymentMo
     setIsLoading(true)
     try {
       const sb = createClientBrowser()
-      
-      // 1. Insert payment
+
+      // 1. Insert payment into invoice_payments.
+      //    Real columns: id, invoice_id, amount, payment_date,
+      //    payment_method, reference_number, status, notes, created_at.
       const { data: payment, error: pErr } = await sb
         .from('invoice_payments')
         .insert({
@@ -53,38 +55,50 @@ export function RecordPaymentModal({ invoice, isOpen, onClose }: RecordPaymentMo
           amount: v.amount,
           payment_date: v.payment_date,
           payment_method: v.payment_method,
+          reference_number: v.transaction_id || null,
+          notes: v.notes || null,
+          status: 'Completed',
         })
         .select()
         .single()
 
       if (pErr) throw pErr
 
-      // 2. Insert transaction
+      // 2. Insert transaction into payment_transactions.
+      //    Real columns: id, invoice_id, payment_id, gateway_transaction_id,
+      //    amount, currency_code, status, raw_response, created_at.
+      //    Notes do NOT live here — they go on invoice_payments.
       const { error: tErr } = await sb
         .from('payment_transactions')
         .insert({
+          invoice_id: invoice.id,
           payment_id: payment.id,
-          transaction_id: v.transaction_id,
+          gateway_transaction_id: v.transaction_id || null,
           amount: v.amount,
+          currency_code: invoice.currency_code || 'USD',
           status: 'completed',
-          notes: v.notes,
         })
 
       if (tErr) throw tErr
 
-      // 3. Update Invoice Status
-      // Calculate total paid
+      // 3. Recompute total paid and pick the right invoice status:
+      //    Paid      if total >= invoice total
+      //    Partial   if some but not all paid
+      //    Unpaid    if nothing was paid (defensive)
       const { data: payments } = await sb
         .from('invoice_payments')
         .select('amount')
         .eq('invoice_id', invoice.id)
 
-      const totalPaid = payments?.reduce((sum, p) => sum + p.amount, 0) || 0
-      const status = totalPaid >= invoice.total_amount ? 'Paid' : 'Partial'
+      const totalPaid = payments?.reduce((sum, p) => sum + Number(p.amount || 0), 0) || 0
+      let status: string
+      if (totalPaid <= 0) status = 'Unpaid'
+      else if (totalPaid >= Number(invoice.total_amount || 0)) status = 'Paid'
+      else status = 'Partial'
 
       await sb
         .from('invoices')
-        .update({ status })
+        .update({ status, amount_paid: totalPaid })
         .eq('id', invoice.id)
 
       toast.success('Payment recorded successfully!')

@@ -5,6 +5,7 @@ import { useSearchParams, useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { CheckCircle, Download, Printer, Loader2, XCircle, ArrowLeft } from "lucide-react"
+import { LegalFooterLinks } from "@/components/billing/legal-footer-links"
 
 function formatMoney(amount: number, currency: string = "USD") {
   const symbols: Record<string, string> = { USD: "$", PKR: "Rs", EUR: "€", GBP: "£" }
@@ -200,6 +201,17 @@ function ReceiptContent() {
                     Questions? Contact us at {company.email || company.website}
                   </p>
                 )}
+
+                {/* Legal links (Refund Policy / Terms & Conditions).
+                    Same source-of-truth as the pay page footer + email
+                    templates. The URLs come from
+                    lib/branding.buildLegalFooterLinks with safe fallbacks
+                    to the brand website + path. */}
+                <LegalFooterLinks
+                  branding={(receipt as any).branding}
+                  overrides={(receipt as any).footer_links}
+                  className="text-center text-xs text-slate-500 mt-3 print:mt-6"
+                />
               </CardContent>
             </Card>
           )}

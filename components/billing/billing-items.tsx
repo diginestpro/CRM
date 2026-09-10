@@ -17,7 +17,7 @@ interface BillingItemsProps<T extends FieldValues> {
   control: Control<T>
   setValue: UseFormSetValue<T>
   watch: UseFormWatch<T>
-  services: { id: string; name: string; base_price: number }[]
+  services: { id: string; name: string; unit_price: number }[]
 }
 
 export function BillingItems<T extends FieldValues>({ control, setValue, watch, services }: BillingItemsProps<T>) {
@@ -26,7 +26,7 @@ export function BillingItems<T extends FieldValues>({ control, setValue, watch, 
 
   const handleServiceChange = (idx: number, id: string) => {
     const s = services.find(s => s.id === id)
-    if (s) setValue(`items.${idx}.unit_price` as any, s.base_price as any)
+    if (s) setValue(`items.${idx}.unit_price` as any, s.unit_price as any)
   }
 
   return (

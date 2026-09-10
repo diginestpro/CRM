@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { CheckCircle, Clock, AlertCircle, CreditCard, Loader2, Mail, MapPin, Phone, Printer, Shield, XCircle, ArrowLeft, Receipt } from "lucide-react"
+import { LegalFooterLinks } from "@/components/billing/legal-footer-links"
 
 function formatMoney(amount: number, currency: string = "USD") {
   const symbols: Record<string, string> = {
@@ -475,6 +476,15 @@ function InvoiceContent({ params }: { params: Promise<{ id: string }> }) {
               Powered by {(invoice as any).branding?.brand_name || companyName} -{" "}
               <a href={(invoice as any).footer_links?.website || (invoice as any).branding?.company_website || "https://diginest.pro"} className="underline" target="_blank" rel="noopener noreferrer">{(invoice as any).branding?.company_website?.replace(/^https?:\/\//, "") || "diginest.pro"}</a>
             </p>
+            {/* Legal links (Refund Policy / Terms & Conditions / Website).
+                Same source-of-truth as the receipt page, the print
+                layouts, and the email templates. */}
+            <LegalFooterLinks
+              branding={(invoice as any).branding}
+              overrides={(invoice as any).footer_links}
+              variant="white"
+              className="mt-3 print:hidden"
+            />
           </div>
         </div>
 

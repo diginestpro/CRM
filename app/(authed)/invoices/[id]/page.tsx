@@ -8,6 +8,8 @@ import { ArrowLeft, FileText, CheckCircle, Clock, AlertCircle } from "lucide-rea
 import { cn } from "@/lib/utils"
 import { InvoiceActions } from "@/components/billing/invoice-actions"
 import { loadFromBlock } from "@/lib/company-address"
+import { InvoicePrintLayout } from "@/components/billing/invoice-print"
+import { resolveBranding, buildLegalFooterLinks } from "@/lib/branding"
 
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -60,6 +62,24 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
       if (invoice.company_id) {
         const { data: comp } = await supabase.from("companies").select("*").eq("id", invoice.company_id).maybeSingle()
         invoice.companies = comp
+      }
+
+      // Resolve branding + legal-footer links so the embedded
+      // <InvoicePrintLayout /> (printed invoice) shows the same
+      // Refund Policy / Terms & Conditions links as the pay page
+      // and emails.
+      if (invoice.company_id) {
+        const { data: appSettingsRow } = await supabase
+          .from("app_settings")
+          .select("*")
+          .eq("company_id", invoice.company_id)
+          .maybeSingle()
+        invoice.branding = resolveBranding({
+          company: invoice.companies,
+          appSettings: appSettingsRow,
+          footerText: invoice.companies?.footer_text ?? null,
+        })
+        invoice.footer_links = buildLegalFooterLinks(invoice.branding)
       }
 
       // Resolve the chosen office address (USA / Pakistan / UAE / ...) so the
@@ -279,6 +299,12 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
           </Card>
         </div>
       </div>
+
+      {/* Printed copy — hidden on screen, revealed by Ctrl+P.
+          Uses the invoice.footer_links we resolved above so the
+          Refund Policy / Terms & Conditions links are present on
+          every printed invoice. */}
+      <InvoicePrintLayout invoice={invoice} />
     </div>
   )
 }

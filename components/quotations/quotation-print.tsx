@@ -1,4 +1,6 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { BRAND_NAME_FALLBACK } from '@/lib/branding'
+import { LegalFooterLinksServer } from '@/components/billing/legal-footer-links-server'
 
 interface QuotationPrintProps {
   quotation: any
@@ -74,9 +76,14 @@ export function QuotationPrintLayout({ quotation }: QuotationPrintProps) {
         </div>
       </div>
 
-      <div className="pt-12 text-center text-slate-400 text-sm">
+      <div className="pt-12 text-center text-slate-400 text-sm space-y-1">
         <p>Thank you for your business!</p>
         <p>This quote is valid for 30 days.</p>
+        <LegalFooterLinksServer
+          branding={(quotation as any).branding}
+          overrides={(quotation as any).footer_links}
+        />
+        <p>© {(quotation as any).branding?.copyright_year || new Date().getFullYear()} {(quotation as any).branding?.brand_name || BRAND_NAME_FALLBACK}</p>
       </div>
     </div>
   )

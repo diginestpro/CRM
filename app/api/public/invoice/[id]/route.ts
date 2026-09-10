@@ -45,14 +45,45 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       { auth: { persistSession: false } }
     )
 
+    // Fetch the invoice WITHOUT an embedded-resource join. PostgREST
+    // joins only resolve when there's a registered FK in the schema
+    // cache; if a future migration breaks that link the whole
+    // request returns HTTP 400 and the pay page ends up with an empty
+    // `{}` body. Doing the join manually below keeps this route
+    // resilient to schema drift.
     const { data: invoice, error: invError } = await supabase
       .from("invoices")
-      .select("*, invoice_items(*, services(name))")
+      .select("*")
       .eq("id", id)
       .maybeSingle()
 
     if (invError) return NextResponse.json({ error: invError.message }, { status: 500 })
     if (!invoice) return NextResponse.json({ error: "Invoice not found" }, { status: 404 })
+
+    // Fetch line items separately.
+    const { data: rawItems, error: itemsErr } = await supabase
+      .from("invoice_items")
+      .select("*")
+      .eq("invoice_id", id)
+    if (itemsErr) return NextResponse.json({ error: itemsErr.message }, { status: 500 })
+
+    // Resolve the matching service names in one IN() query.
+    const serviceIds = Array.from(
+      new Set((rawItems || []).map((it: any) => it.service_id).filter(Boolean))
+    ) as string[]
+    const servicesMap: Record<string, any> = {}
+    if (serviceIds.length > 0) {
+      const { data: services, error: svcErr } = await supabase
+        .from("services")
+        .select("id, name")
+        .in("id", serviceIds)
+      if (svcErr) return NextResponse.json({ error: svcErr.message }, { status: 500 })
+      ;((services as any[]) || []).forEach((s: any) => { servicesMap[s.id] = s })
+    }
+    invoice.invoice_items = (rawItems || []).map((it: any) => ({
+      ...it,
+      services: servicesMap[it.service_id] || null,
+    }))
 
     const { data: paymentMethods } = await supabase
       .from("invoice_payment_methods")
@@ -75,14 +106,11 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
     const savedMethods = (paymentMethods?.map(m => m.payment_method) || [])
       .filter((m) => activeNames.includes(m))
-    // If the saved set is empty after filtering (e.g. older invoice
-    // whose payment_methods rows haven't been populated yet, or all
-    // saved gateways are now inactive), fall back to the active set so
-    // the client can still pay via SOME gateway.
+    // If the saved set is empty after filtering, fall back to the
+    // active set so the client can still pay via SOME gateway.
     invoice.allowed_methods = savedMethods.length > 0 ? savedMethods : activeNames
 
-    // Note: defaults are safe even on older invoices that haven't yet
-    // been saved with these columns (e.g. before migration 0009).
+    // Defaults for invoices saved before migration 0009.
     invoice.allows_partial_payments = invoice.allows_partial_payments ?? false
     invoice.min_payment = invoice.min_payment ?? null
 
@@ -95,12 +123,10 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       invoice.companies = comp
     }
 
-    // Resolve the chosen office address (USA / PK / UAE / ...) for the
-    // "From" block shown on /pay and the receipt page.
+    // Resolve the chosen office address for the "From" block.
     invoice.from_block = await loadFromBlock(supabase, invoice)
 
-    // Resolve branding (brand_name + website) once so the pay page,
-    // receipt, and email senders can all read it from invoice.branding.
+    // Resolve branding once so the pay page, receipt, and emails share it.
     let appSettings: any = null
     if (invoice.company_id) {
       const { data } = await supabase
@@ -123,10 +149,11 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   }
 }
 
-// POST is deprecated - payments now go through /api/payments/checkout with proper auth
+// POST is deprecated - payments now go through /api/payments/checkout
 export async function POST() {
   return NextResponse.json(
     { error: "This endpoint is deprecated. Use /api/payments/checkout instead." },
     { status: 410 }
   )
 }
+

@@ -29,14 +29,14 @@ export default async function ServicesPage() {
       </div>
       <div className="rounded-xl border bg-white shadow-sm">
         <Table>
-          <TableHeader><TableRow><TableHead>Service Name</TableHead><TableHead>Description</TableHead><TableHead>Unit</TableHead><TableHead>Base Price</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Service Name</TableHead><TableHead>Description</TableHead><TableHead>Unit</TableHead><TableHead>Unit Price</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
           <TableBody>
             {services && services.length > 0 ? services.map((service) => (
               <TableRow key={service.id}>
                 <TableCell className="font-medium text-slate-900"><div className="flex items-center gap-2"><Package className="h-4 w-4 text-slate-400" />{service.name}</div></TableCell>
                 <TableCell className="text-slate-600 max-w-xs truncate">{service.description || "-"}</TableCell>
                 <TableCell className="text-slate-600 capitalize">{service.unit_type || "fixed"}</TableCell>
-                <TableCell className="font-medium text-slate-900">{new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(service.base_price)}</TableCell>
+                <TableCell className="font-medium text-slate-900">{new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(service.unit_price)}</TableCell>
                 <TableCell><span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", service.is_active ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600")}>{service.is_active ? "Active" : "Inactive"}</span></TableCell>
                 <TableCell className="text-right"><ServiceRowActions serviceId={service.id} /></TableCell>
               </TableRow>

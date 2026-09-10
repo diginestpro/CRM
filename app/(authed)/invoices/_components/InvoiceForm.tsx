@@ -41,7 +41,7 @@ interface InvoiceFormProps {
 export default function InvoiceForm({ initialData, invoiceId, isEdit = false }: InvoiceFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [clients, setClients] = useState<{ id: string; full_name: string; email: string | null; allowed_gateways: string[] | null }[]>([])
-  const [services, setServices] = useState<{ id: string; name: string; base_price: number }[]>([])
+  const [services, setServices] = useState<{ id: string; name: string; unit_price: number }[]>([])
   const [companyOffices, setCompanyOffices] = useState<any[]>([])
   const [selectedCompanyAddressId, setSelectedCompanyAddressId] = useState<string>("")
   const [activeGateways, setActiveGateways] = useState<{ gateway_name: string }[]>([])
@@ -73,7 +73,7 @@ export default function InvoiceForm({ initialData, invoiceId, isEdit = false }: 
       const sb = createClientBrowser()
       const [cRes, sRes, oRes, settingsRes] = await Promise.all([
         sb.from("clients").select("id, full_name, email, allowed_gateways").order("full_name"),
-        sb.from("services").select("id, name, base_price").eq("is_active", true).order("name"),
+        sb.from("services").select("id, name, unit_price").eq("is_active", true).order("name"),
         sb.from("company_addresses").select("id, address_name, street, city, state, postal_code, country, is_default").order("is_default", { ascending: false }).order("created_at", { ascending: true }),
         fetch("/api/settings/payments").then(r => r.json()).catch(() => null)
       ])
@@ -163,16 +163,33 @@ export default function InvoiceForm({ initialData, invoiceId, isEdit = false }: 
       }
 
       // Build the invoice payload. We DO NOT spread `...values` because
-      // that includes `items` (a form-only array — persisted to
+      // that includes `items` (a form-only array Ã¢â‚¬â€ persisted to
       // invoice_items separately) and any other form keys that don't
       // exist as columns. Sending an unknown key makes PostgREST return
       // a 400 from its schema cache. We whitelist only the real
       // `invoices` columns here.
       //
       // NOTE: the `invoices` table does NOT have an `allowed_gateways`
-      // column — that lives on the CLIENT. Per-invoice payment controls
+      // column Ã¢â‚¬â€ that lives on the CLIENT. Per-invoice payment controls
       // use pluralised names: allows_partial_payments (not
       // allows_partial_payment) and min_payment (not min_payment_amount).
+      // Compute the totals from the line items BEFORE building the payload.
+      // We do this here (not via the `totals` const above) so the values are
+      // in scope for the INSERT. Without these, the dashboard, list page,
+      // and detail page all show $0.00 even though invoice_items has the
+      // real line totals.
+      const lineItemsForCalc = (values.items || []).filter(
+        (it: any) => it.service_id || it.description
+      )
+      const computedTotals = calculateInvoiceTotals(
+        lineItemsForCalc.map((i: any) => ({
+          description: i.description || "",
+          quantity: i.quantity,
+          unit_price: i.unit_price,
+        })),
+        Number(values.tax_rate ?? 0)
+      )
+
       const payload: Record<string, any> = {
         client_id: values.client_id,
         invoice_number: values.invoice_number,
@@ -188,9 +205,12 @@ export default function InvoiceForm({ initialData, invoiceId, isEdit = false }: 
         allows_partial_payments: allowsPartial,
         min_payment: minPayment === "" ? null : Number(minPayment),
         currency_code: null,
-        subtotal: 0,
-        tax_amount: 0,
-        total_amount: 0,
+        // Persist the computed totals so the invoice row reflects reality.
+        // Without these, the dashboard, list page, and detail page all
+        // show $0.00 even though invoice_items has the real line totals.
+        subtotal: computedTotals.subtotal,
+        tax_amount: computedTotals.taxAmount,
+        total_amount: computedTotals.total,
         amount_paid: 0,
       }
       // Strip any null/undefined keys for cleanliness.
@@ -214,7 +234,7 @@ export default function InvoiceForm({ initialData, invoiceId, isEdit = false }: 
       // Persist line items into invoice_items. We always write a
       // `description` (falling back to the selected service name) so
       // the line shows up correctly on the invoice, pay page, receipt,
-      // and emails — even if the underlying service is later deleted.
+      // and emails Ã¢â‚¬â€ even if the underlying service is later deleted.
       const lineItems = (values.items || []).filter((it: any) => it.service_id || it.description)
       if (lineItems.length > 0) {
         const itemsPayload = lineItems.map((it: any) => {
