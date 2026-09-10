@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local tooling / artefacts that should not be committed
+/backups/             # fresh schema dumps (see scripts/backup_schema_docker.ps1)
+/.vscode/             # personal IDE settings
