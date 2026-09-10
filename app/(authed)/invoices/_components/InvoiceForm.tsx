@@ -162,23 +162,30 @@ export default function InvoiceForm({ initialData, invoiceId, isEdit = false }: 
         return
       }
 
-      // Build the invoice payload. NOTE: the `invoices` table does NOT
-      // have an `allowed_gateways` column — that lives on the CLIENT.
-      // Per-invoice payment controls use pluralised names:
-      //   allows_partial_payments (not allows_partial_payment)
-      //   min_payment             (not min_payment_amount)
-      const payload = {
-        ...values,
+      // Build the invoice payload. We DO NOT spread `...values` because
+      // that includes `items` (a form-only array — persisted to
+      // invoice_items separately) and any other form keys that don't
+      // exist as columns. Sending an unknown key makes PostgREST return
+      // a 400 from its schema cache. We whitelist only the real
+      // `invoices` columns here.
+      //
+      // NOTE: the `invoices` table does NOT have an `allowed_gateways`
+      // column — that lives on the CLIENT. Per-invoice payment controls
+      // use pluralised names: allows_partial_payments (not
+      // allows_partial_payment) and min_payment (not min_payment_amount).
+      const payload: Record<string, any> = {
+        client_id: values.client_id,
+        invoice_number: values.invoice_number,
         status: status,
+        due_date: values.due_date || null,
+        notes: values.notes || null,
+        tax_rate: values.tax_rate ?? 0,
         company_id: companyId,
         company_address_id: selectedCompanyAddressId || null,
         allows_partial_payments: allowsPartial,
         min_payment: minPayment === "" ? null : Number(minPayment),
-        // Strip any keys the invoices table doesn't have so we never
-        // send a 400 from a PostgREST schema-cache miss.
-        allowed_gateways: undefined,
       }
-      // Drop undefined keys so they don't reach the wire.
+      // Strip any null/undefined keys for cleanliness.
       for (const k of Object.keys(payload)) {
         if ((payload as any)[k] === undefined) delete (payload as any)[k]
       }

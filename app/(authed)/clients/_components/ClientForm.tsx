@@ -97,8 +97,20 @@ export default function ClientForm({ initialData, clientId, isEdit = false }: Cl
 
       const { address, ...clientFields } = values
 
-      const payload = {
-        ...clientFields,
+      // Whitelist only the actual `clients` columns. `address` is split
+      // off and persisted to client_addresses separately; spreading it
+      // would 400 the insert. We pick fields by name to be safe even if
+      // someone adds a new field to the form schema in the future.
+      const payload: Record<string, any> = {
+        full_name: clientFields.full_name,
+        company_name: clientFields.company_name || null,
+        project_name: clientFields.project_name || null,
+        email: clientFields.email || null,
+        phone: clientFields.phone || null,
+        website: clientFields.website || null,
+        tax_number: clientFields.tax_number || null,
+        country: clientFields.country || null,
+        notes: clientFields.notes || null,
         allowed_gateways: allowedGateways.length > 0 ? allowedGateways : null,
       }
 
