@@ -153,9 +153,9 @@ SELECT id, full_name, company_name, email, phone, country,
  ORDER BY created_at DESC LIMIT 50;
 
 -- Invoice payments list
+-- (live invoice_payments has NO currency_code column; dropped)
 EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
-SELECT id, invoice_id, amount, currency_code, status,
-       payment_method, payment_date
+SELECT id, invoice_id, amount, status, payment_method, payment_date
   FROM public.invoice_payments
  ORDER BY payment_date DESC LIMIT 50;
 
