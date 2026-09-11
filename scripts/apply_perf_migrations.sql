@@ -225,8 +225,25 @@ CREATE INDEX IF NOT EXISTS idx_payment_gateways_company_active
     WHERE is_active = true;
 
 -- payment_reminders
-CREATE INDEX IF NOT EXISTS idx_payment_reminders_company_status_due
-    ON public.payment_reminders (company_id, status, due_date);
+-- NOTE: live DB schema as of 2026-09-10 has NO due_date column
+-- on payment_reminders (only sent_at). Index on what exists.
+DO $pr$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+         WHERE table_schema='public' AND table_name='payment_reminders'
+           AND column_name='due_date'
+    ) THEN
+        CREATE INDEX IF NOT EXISTS idx_payment_reminders_company_status_due
+            ON public.payment_reminders (company_id, status, due_date);
+    ELSE
+        -- Fallback: index on (company_id, status, sent_at) which is what
+        -- the reminder queue actually filters on.
+        CREATE INDEX IF NOT EXISTS idx_payment_reminders_company_status_sent
+            ON public.payment_reminders (company_id, status, sent_at DESC NULLS LAST);
+        RAISE NOTICE 'NOTICE 0020-G: payment_reminders.due_date missing - used sent_at fallback';
+    END IF;
+END $pr$;
 
 -- ------------------------------------------------------------
 -- 4. COMM / LOGS
