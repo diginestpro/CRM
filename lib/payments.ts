@@ -339,9 +339,15 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
     }
 
     // payload may already be parsed by the route or still a string
-    const body = typeof payload === "string"
+    let body = typeof payload === "string"
       ? (() => { try { return JSON.parse(payload) } catch { return {} } })()
       : (payload || {})
+
+    // SafePay webhook v2.0.0 wraps the entire event under a "root" key.
+    // Unwrap it so the data/tracker/metadata lookups below still work.
+    if (body && typeof body === "object" && body.root && typeof body.root === "object") {
+      body = body.root
+    }
 
     // SafePay sends data under .data, but also keep top-level fallback
     const inner = body.data || {}

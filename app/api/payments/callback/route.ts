@@ -45,7 +45,12 @@ async function markInvoicePaid(req: Request, body: string) {
 
   if (body) {
     try {
-      const p = JSON.parse(body)
+      let p = JSON.parse(body)
+      // SafePay webhook v2.0.0 wraps the entire event under a "root" key.
+      // Unwrap it so the existing field lookups (type/data/metadata) still work.
+      if (p && typeof p === "object" && p.root && typeof p.root === "object") {
+        p = p.root
+      }
       if (p.resource?.purchase_units) {
         gateway = "PayPal"
         orderId = orderId || p.resource.purchase_units[0]?.custom_id || ""
