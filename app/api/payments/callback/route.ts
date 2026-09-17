@@ -204,17 +204,23 @@ async function markInvoicePaid(req: Request, body: string) {
   // Send receipt email if invoice just became Paid (best-effort, do not fail webhook on email error)
   if (newStatus === "Paid") {
     try {
-      const { data: invoiceWithCompany } = await supabase
-        .from("invoices")
-        .select("company_id")
-        .eq("id", orderId)
-        .maybeSingle()
-      if (invoiceWithCompany?.company_id) {
-        console.log(`[Callback] sending receipt email for invoice=${orderId} company=${invoiceWithCompany.company_id}`)
-        const emailResult = await sendReceiptEmail(invoiceWithCompany.company_id, orderId)
-        console.log(`[Callback] receipt email result:`, emailResult)
+      // Only send email if the invoice was NOT already Paid before this payment,
+      // to avoid spamming duplicate receipts when SafePay fires twice (GET + POST).
+      if (invoice.status !== "Paid") {
+        const { data: invoiceWithCompany } = await supabase
+          .from("invoices")
+          .select("company_id")
+          .eq("id", orderId)
+          .maybeSingle()
+        if (invoiceWithCompany?.company_id) {
+          console.log(`[Callback] sending receipt email for invoice=${orderId} company=${invoiceWithCompany.company_id}`)
+          const emailResult = await sendReceiptEmail(invoiceWithCompany.company_id, orderId)
+          console.log(`[Callback] receipt email result:`, emailResult)
+        } else {
+          console.log(`[Callback] no company_id on invoice ${orderId}, skipping email`)
+        }
       } else {
-        console.log(`[Callback] no company_id on invoice ${orderId}, skipping email`)
+        console.log(`[Callback] invoice ${orderId} was already Paid, skipping duplicate receipt email`)
       }
     } catch (emailErr: any) {
       console.log(`[Callback] receipt email failed (non-fatal): ${emailErr?.message}`)
