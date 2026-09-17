@@ -34,7 +34,7 @@ async function markInvoicePaid(req: Request, body: string) {
   let tracker = url.searchParams.get("tracker") || ""
   const supabase = getServiceClient()
 
-  console.log(\`[Callback] START method=\${req.method}\`)
+  console.log("[Callback] START method=" + req.method)
 
   if (!orderId && tracker) {
     const { data: txn } = await supabase
@@ -78,21 +78,21 @@ async function markInvoicePaid(req: Request, body: string) {
         }
       }
     } catch (e: any) {
-      console.log(\`[Callback] JSON parse error: \${e?.message}\`)
+      console.log("[Callback] JSON parse error: " + (e?.message || "unknown"))
     }
   }
 
-  console.log(\`[Callback] Parsed orderId=\${orderId} amount=\${amount} tracker=\${tracker} gateway=\${gateway}\`)
+  console.log("[Callback] Parsed orderId=" + orderId + " amount=" + amount + " tracker=" + tracker + " gateway=" + gateway)
 
   if (!orderId) {
-    console.log(\`[Callback] ERROR no orderId\`)
+    console.log("[Callback] ERROR no orderId")
     return { error: "order_id not found" }
   }
 
   // Validate UUID format before querying Supabase.
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
   if (!uuidRegex.test(orderId)) {
-    console.log(\`[Callback] Invalid UUID: \${orderId}. Marking as received but not processing.\`)
+    console.log("[Callback] Invalid UUID: " + orderId + ". Marking as received but not processing.")
     return { success: true, duplicate: true, error: "Invalid UUID" }
   }
 
@@ -103,14 +103,15 @@ async function markInvoicePaid(req: Request, body: string) {
     .maybeSingle()
 
   if (invErr) {
-    console.log(\`[Callback] DB error fetching invoice \${orderId}: \${invErr.message}\`)
+    console.log("[Callback] DB error fetching invoice " + orderId + ": " + invErr.message)
     return { error: "Database error" }
   }
 
   if (!invoice) {
-    console.log(\`[Callback] Invoice \${orderId} not found\`)
+    console.log("[Callback] Invoice " + orderId + " not found")
     return { error: "Invoice not found" }
   }
+
   // Deduplication check
   const { data: existingTxn } = await supabase
     .from("payment_transactions")
@@ -121,7 +122,7 @@ async function markInvoicePaid(req: Request, body: string) {
     .maybeSingle()
 
   if (existingTxn) {
-    console.log(\`[Callback] Invoice \${orderId} already paid (txn \${existingTxn.id}), skipping\`)
+    console.log("[Callback] Invoice " + orderId + " already paid (txn " + existingTxn.id + "), skipping")
     return { success: true, duplicate: true }
   }
 
@@ -130,7 +131,7 @@ async function markInvoicePaid(req: Request, body: string) {
     amount = invoice.total_amount
   }
 
-  console.log(\`[Callback] Marking invoice \${orderId} as paid. Amount: \${amount}\`)
+  console.log("[Callback] Marking invoice " + orderId + " as paid. Amount: " + amount)
 
   try {
     const { data: payment, error: pErr } = await supabase
@@ -182,14 +183,14 @@ async function markInvoicePaid(req: Request, body: string) {
             await sendReceiptEmail(invComp.clients.company_id, orderId)
           }
         } catch (e: any) {
-          console.log(\`[Callback] async email error: \${e?.message}\`)
+          console.log("[Callback] async email error: " + (e?.message || "unknown"))
         }
       })()
     }
 
     return { success: true }
   } catch (e: any) {
-    console.log(\`[Callback] Update failed: \${e?.message}\`)
+    console.log("[Callback] Update failed: " + (e?.message || "Internal error"))
     return { error: e?.message || "Internal error" }
   }
 }
@@ -200,25 +201,25 @@ export async function POST(req: Request) {
   try {
     body = await req.text()
   } catch (e: any) {
-    console.log(\`[Callback] POST body read error: \${e?.message}\`)
+    console.log("[Callback] POST body read error: " + (e?.message || "unknown"))
   }
-  console.log(\`[Callback] POST received body length=\${body.length}\`)
+  console.log("[Callback] POST received body length=" + body.length)
   let result
   try {
     result = await markInvoicePaid(req, body)
   } catch (e: any) {
-    console.log(\`[Callback] POST crash: \${e?.message}\\n\${e?.stack}\`)
+    console.log("[Callback] POST crash: " + (e?.message || "unknown") + "\\n" + (e?.stack || ""))
     return NextResponse.json({ error: e?.message || "Internal error" }, { status: 500 })
   }
   if (result.error) {
-    console.log(\`[Callback] POST error: \${result.error}\`)
+    console.log("[Callback] POST error: " + result.error)
     if (result.duplicate) {
-      console.log(\`[Callback] POST duplicate detected, returning 200\`)
+      console.log("[Callback] POST duplicate detected, returning 200")
       return NextResponse.json(result, { status: 200 })
     }
     return NextResponse.json(result, { status: 400 })
   }
-  console.log(\`[Callback] POST returning 200 success\`)
+  console.log("[Callback] POST returning 200 success")
   return NextResponse.json(result)
 }
 
@@ -244,10 +245,28 @@ export async function GET(req: Request) {
   }
 
   if (tracker) params.set("tracker", tracker)
-  const dest = \`/pay/\${orderId}?\` + params.toString()
+  const dest = "/pay/" + orderId + "?" + params.toString()
   const fullUrl = new URL(dest, url.origin).toString()
 
-  const html = \`<!doctype html><html><head><meta charset="utf-8">\n<title>Payment Status</title>\n<meta http-equiv="refresh" content="0;url=\${fullUrl}">\n<style>\nbody{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f8fafc;color:#0f172a}\n.c{text-align:center;padding:32px;background:white;border-radius:16px;box-shadow:0 10px 25px rgba(15,23,42,.08);max-width:440px}\nh1{font-size:22px;margin:0 0 8px}p{color:#64748b;margin:8px 0 0;font-size:14px}\na.btn{display:inline-block;margin-top:16px;padding:12px 24px;background:#2563eb;color:white;border-radius:8px;text-decoration:none;font-weight:600}\n</style></head>\n<body><div class="c">\n<h1>\${isPaid ? "\\u2705 Payment Successful" : "\\u23F3 Verifying Payment..."}</h1>\n<p>\${isPaid ? "Returning to your invoice..." : "We are confirming your payment with SafePay. Please wait a moment."}</p>\n<a class="btn" href="\${fullUrl}">\${isPaid ? "View Invoice" : "Check Status"}</a>\n</div></body></html>\`
+  const title = "Payment Status"
+  const h1 = isPaid ? "✅ Payment Successful" : "⏳ Verifying Payment..."
+  const p = isPaid ? "Returning to your invoice..." : "We are confirming your payment with SafePay. Please wait a moment."
+  const btn = isPaid ? "View Invoice" : "Check Status"
+
+  const html = "<!doctype html><html><head><meta charset=\"utf-8\">\n" +
+    "<title>" + title + "</title>\n" +
+    "<meta http-equiv=\"refresh\" content=\"0;url=" + fullUrl + "\">\n" +
+    "<style>\n" +
+    "body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f8fafc;color:#0f172a}\n" +
+    ".c{text-align:center;padding:32px;background:white;border-radius:16px;box-shadow:0 10px 25px rgba(15,23,42,.08);max-width:440px}\n" +
+    "h1{font-size:22px;margin:0 0 8px}p{color:#64748b;margin:8px 0 0;font-size:14px}\n" +
+    "a.btn{display:inline-block;margin-top:16px;padding:12px 24px;background:#2563eb;color:white;border-radius:8px;text-decoration:none;font-weight:600}\n" +
+    "</style></head>\n" +
+    "<body><div class=\"c\">\n" +
+    "<h1>" + h1 + "</h1>\n" +
+    "<p>" + p + "</p>\n" +
+    "<a class=\"btn\" href=\"" + fullUrl + "\">" + btn + "</a>\n" +
+    "</div></body></html>"
 
   return new NextResponse(html, {
     status: 200,
