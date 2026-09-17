@@ -244,11 +244,20 @@ export async function POST(req: Request) {
     result = await markInvoicePaid(req, body)
   } catch (e: any) {
     console.log(`[Callback] POST crash: ${e?.message}\n${e?.stack}`)
-    return NextResponse.json({ error: e?.message || "Internal error", received: true }, { status: 200 })
+    // Return 500 for genuine crashes so SafePay knows something went wrong and can retry
+    return NextResponse.json({ error: e?.message || "Internal error" }, { status: 500 })
   }
   if (result.error) {
     console.log(`[Callback] POST error: ${result.error}`)
-    return NextResponse.json({ ...result, received: true }, { status: 200 })
+    // Only return 200 (acknowledge as success) when the payment was already
+    // processed (duplicate webhook from SafePay firing twice). For genuine
+    // errors like "Invoice not found", return 400 so SafePay retries.
+    if (result.duplicate) {
+      console.log(`[Callback] POST duplicate detected, returning 200`)
+      return NextResponse.json(result, { status: 200 })
+    }
+    // For genuine errors, return 400 - SafePay will mark UNDELIVERED and retry
+    return NextResponse.json(result, { status: 400 })
   }
   console.log(`[Callback] POST returning 200 success`)
   return NextResponse.json(result)
