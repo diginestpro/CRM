@@ -35,6 +35,11 @@ export default function PaymentsPage() {
       finally { setIsLoading(false) }
     }
     load()
+
+    // Auto-refresh every 30 seconds so new payments from webhooks appear
+    // without requiring a manual page reload.
+    const interval = setInterval(load, 30_000)
+    return () => clearInterval(interval)
   }, [])
 
   const filtered = payments.filter(p => {
