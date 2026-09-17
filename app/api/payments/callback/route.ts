@@ -5,17 +5,6 @@ import { processPaymentSuccess } from "@/lib/payments"
 
 export const dynamic = "force-dynamic"
 
-/**
- * Backup webhook endpoint at /api/payments/callback.
- * Why: The Next.js 16 / Vercel edge was rewriting /api/payments/webhook into
- * /login/api/payments/webhook for non-authenticated requests. Some environments
- * also strip the /api/payments prefix from redirect URLs. This route lives at a
- * different path so any such rewriting won't reach it.
- *
- * Behavior: accepts GET and POST
- *  - POST: standard webhook (with optional JSON body)
- *  - GET: SafePay redirect-back with order_id + tracker in the query string
- */
 function getServiceClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -32,7 +21,7 @@ async function markInvoicePaid(req: Request, body: string) {
   let tracker = url.searchParams.get("tracker") || ""
   const supabase = getServiceClient()
 
-  console.log("[Callback] START method=" + req.method)
+  console.log(`[Callback] START method=${req.method} - Debugging on`)
 
   if (!orderId && tracker) {
     const { data: txn } = await supabase
@@ -43,9 +32,11 @@ async function markInvoicePaid(req: Request, body: string) {
     orderId = txn?.invoice_id || ""
   }
 
+  let parsedBody: any = null
   if (body) {
     try {
-      let p = JSON.parse(body)
+      parsedBody = JSON.parse(body)
+      let p = parsedBody
       if (p && typeof p === "object" && p.root && typeof p.root === "object") {
         p = p.root
       }
@@ -56,7 +47,15 @@ async function markInvoicePaid(req: Request, body: string) {
         if (paypalAmt) amount = parseFloat(paypalAmt)
       } else {
         const inner = p.data || {}
-        orderId = orderId || inner?.metadata?.order_id || inner?.order_id || p?.metadata?.order_id || p?.order_id || ""
+        orderId = orderId || 
+                  inner?.metadata?.order_id || inner?.order_id || 
+                  p?.metadata?.order_id || p?.order_id || 
+                  inner?.metadata?.invoice_id || inner?.invoice_id || 
+                  p?.metadata?.invoice_id || p?.invoice_id || 
+                  inner?.reference || p?.reference || 
+                  inner?.merchant_reference || p?.merchant_reference || 
+                  inner?.transaction_id || p?.transaction_id || 
+                  inner?.custom || p?.custom || "";
         const rawAmt = inner?.amount ?? p?.amount
         if (typeof rawAmt === "number") amount = rawAmt / 100
         else if (typeof rawAmt === "string") amount = parseFloat(rawAmt) / 100
@@ -67,18 +66,26 @@ async function markInvoicePaid(req: Request, body: string) {
     }
   }
 
-  console.log("[Callback] Parsed orderId=" + orderId + " amount=" + amount + " tracker=" + tracker + " gateway=" + gateway)
+  console.log(`[Callback] Parsed orderId=${orderId} amount=${amount} tracker=${tracker} gateway=${gateway}`)
 
-  if (!orderId) return { error: "order_id not found" }
+  if (!orderId) {
+    if (parsedBody) {
+      const keys = Object.keys(parsedBody).join(", ")
+      console.log(`[Callback] MISSING orderId. Payload keys: ${keys}. Body sample: ${body.substring(0, 200)}...`)
+    } else {
+      console.log(`[Callback] MISSING orderId. No body provided. URL: ${req.url}`)
+    }
+    return { error: "order_id not found" }
+  }
 
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
   if (!uuidRegex.test(orderId)) {
+    console.log(`[Callback] Invalid UUID format: ${orderId}`)
     return { success: true, duplicate: true, error: "Invalid UUID" }
   }
 
   try {
-    const payload = body ? JSON.parse(body) : {}
-    const result = await processPaymentSuccess(supabase, orderId, amount || 0, gateway, tracker || orderId, payload)
+    const result = await processPaymentSuccess(supabase, orderId, amount || 0, gateway, tracker || orderId, parsedBody || {})
     return result
   } catch (e: any) {
     console.log("[Callback] Update failed: " + (e?.message || "Internal error"))
@@ -144,7 +151,7 @@ export async function GET(req: Request) {
   const btn = isPaid ? "View Invoice" : "Check Status"
 
   const html = `<!doctype html>
-<html >
+<html>
 <head>
   <meta charset="utf-8">
   <title>${title}</title>
@@ -163,7 +170,7 @@ export async function GET(req: Request) {
     <a class="btn" href="${fullUrl}">${btn}</a>
   </div>
 </body>
-</html>`;
+</html>`
 
   return new NextResponse(html, {
     status: 200,
