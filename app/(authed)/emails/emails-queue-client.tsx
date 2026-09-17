@@ -225,7 +225,7 @@ export function EmailsQueueClient({
                       )}
                       {row.sent_at && (
                         <p className="text-[11px] text-emerald-700 mt-0.5">
-                          Sent {new Date(row.sent_at).toLocaleString()}
+                          Sent {formatDate(row.sent_at)}
                         </p>
                       )}
                     </div>
