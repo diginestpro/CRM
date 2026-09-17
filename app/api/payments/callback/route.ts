@@ -171,7 +171,7 @@ async function markInvoicePaid(req: Request, body: string) {
 
     await supabase.from("invoices").update({ status: newStatus, amount_paid: totalPaid }).eq("id", orderId)
 
-    if (statusChangedToPaid || (invoice.status === "Paid" && amount > 0)) {
+    if (statusChangedToPaid || (invoice.status === "Paid" && (amount ?? 0) > 0)) {
       (async () => {
         try {
           const { data: invComp } = await supabase
@@ -179,8 +179,9 @@ async function markInvoicePaid(req: Request, body: string) {
             .select("clients(company_id)")
             .eq("id", orderId)
             .single()
-          if (invComp?.clients?.company_id) {
-            await sendReceiptEmail(invComp.clients.company_id, orderId)
+          const companyId = (Array.isArray(invComp?.clients) ? invComp.clients[0] : invComp?.clients)?.company_id;
+          if (companyId) {
+            await sendReceiptEmail(companyId, orderId)
           }
         } catch (e: any) {
           console.log("[Callback] async email error: " + (e?.message || "unknown"))
