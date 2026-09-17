@@ -21,7 +21,7 @@ async function markInvoicePaid(req: Request, body: string) {
   let tracker = url.searchParams.get("tracker") || ""
   const supabase = getServiceClient()
 
-  console.log(`[Callback] START method=${req.method} - Debugging on`)
+  console.log(`[Callback] START method=${req.method}`)
 
   if (!orderId && tracker) {
     const { data: txn } = await supabase
@@ -78,14 +78,43 @@ async function markInvoicePaid(req: Request, body: string) {
     return { error: "order_id not found" }
   }
 
+  // --- SMART ID RESOLUTION ---
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  let finalInvoiceId = orderId
+
   if (!uuidRegex.test(orderId)) {
-    console.log(`[Callback] Invalid UUID format: ${orderId}`)
-    return { success: true, duplicate: true, error: "Invalid UUID" }
+    console.log(`[Callback] Non-UUID ID detected: ${orderId}. Attempting lookup...`)
+    
+    // 1. Try to find by invoice_number
+    const { data: invByNum } = await supabase
+      .from("invoices")
+      .select("id")
+      .eq("invoice_number", orderId)
+      .maybeSingle()
+    
+    if (invByNum) {
+      console.log(`[Callback] Found invoice by number: ${invByNum.id}`)
+      finalInvoiceId = invByNum.id
+    } else {
+      // 2. Try to find by transaction reference
+      const { data: txnByRef } = await supabase
+        .from("payment_transactions")
+        .select("invoice_id")
+        .eq("gateway_transaction_id", orderId)
+        .maybeSingle()
+      
+      if (txnByRef) {
+        console.log(`[Callback] Found invoice via transaction ref: ${txnByRef.invoice_id}`)
+        finalInvoiceId = txnByRef.invoice_id
+      } else {
+        console.log(`[Callback] Could not resolve ID ${orderId} to a UUID.`)
+        return { success: true, duplicate: true, error: "Unresolvable ID" }
+      }
+    }
   }
 
   try {
-    const result = await processPaymentSuccess(supabase, orderId, amount || 0, gateway, tracker || orderId, parsedBody || {})
+    const result = await processPaymentSuccess(supabase, finalInvoiceId, amount || 0, gateway, tracker || orderId, parsedBody || {})
     return result
   } catch (e: any) {
     console.log("[Callback] Update failed: " + (e?.message || "Internal error"))
