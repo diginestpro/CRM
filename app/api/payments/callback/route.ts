@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { sendReceiptEmail } from "@/lib/email"
 
 export const dynamic = "force-dynamic"
 
@@ -198,6 +199,26 @@ async function markInvoicePaid(req: Request, body: string) {
   if (updErr) {
     console.log(`[Callback] ERROR invoice update: ${updErr.message}`)
     return { error: updErr.message }
+  }
+
+  // Send receipt email if invoice just became Paid (best-effort, do not fail webhook on email error)
+  if (newStatus === "Paid") {
+    try {
+      const { data: invoiceWithCompany } = await supabase
+        .from("invoices")
+        .select("company_id")
+        .eq("id", orderId)
+        .maybeSingle()
+      if (invoiceWithCompany?.company_id) {
+        console.log(`[Callback] sending receipt email for invoice=${orderId} company=${invoiceWithCompany.company_id}`)
+        const emailResult = await sendReceiptEmail(invoiceWithCompany.company_id, orderId)
+        console.log(`[Callback] receipt email result:`, emailResult)
+      } else {
+        console.log(`[Callback] no company_id on invoice ${orderId}, skipping email`)
+      }
+    } catch (emailErr: any) {
+      console.log(`[Callback] receipt email failed (non-fatal): ${emailErr?.message}`)
+    }
   }
 
   console.log(`[Callback] SUCCESS invoice=${orderId} amount=${finalAmount} status=${newStatus} elapsed=${Date.now() - startTime}ms`)
