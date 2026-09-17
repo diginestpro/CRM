@@ -39,7 +39,12 @@ function detectGateway(req: Request, body: string): string {
 
   // Try to sniff the body
   try {
-    const parsed = JSON.parse(body)
+    let parsed = JSON.parse(body)
+    // SafePay webhook v2.0.0 wraps the entire event under a "root" key.
+    // Unwrap it so the type/event detection below works.
+    if (parsed && typeof parsed === "object" && parsed.root && typeof parsed.root === "object") {
+      parsed = parsed.root
+    }
     // SafePay: either { event: "payment.completed" } (old) or { type: "payment.succeeded" } (new)
     if (parsed?.event?.startsWith("payment.")) return "safepay"
     if (parsed?.type?.startsWith("payment.")) return "safepay"

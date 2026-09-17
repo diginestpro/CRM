@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { sendReceiptEmail } from "@/lib/email"
 
 export const dynamic = "force-dynamic"
 
@@ -24,28 +25,33 @@ function getServiceClient() {
 
 async function markInvoicePaid(req: Request, body: string) {
   const url = new URL(req.url)
+  const startTime = Date.now()
 
   // SafePay sends order_id in different places depending on payload shape.
   let orderId = url.searchParams.get("order_id") || url.searchParams.get("invoice_id") || ""
   let amount: number | null = null
   let gateway = "SafePay"
+  let tracker = url.searchParams.get("tracker") || ""
   const supabase = getServiceClient()
 
-  if (!orderId) {
-    const tracker = url.searchParams.get("tracker")
-    if (tracker) {
-      const { data: txn } = await supabase
-        .from("payment_transactions")
-        .select("invoice_id")
-        .eq("gateway_transaction_id", tracker)
-        .maybeSingle()
-      orderId = txn?.invoice_id || ""
-    }
+  console.log(`[Callback] START method=${req.method}`)
+
+  if (!orderId && tracker) {
+    const { data: txn } = await supabase
+      .from("payment_transactions")
+      .select("invoice_id")
+      .eq("gateway_transaction_id", tracker)
+      .maybeSingle()
+    orderId = txn?.invoice_id || ""
   }
 
   if (body) {
     try {
-      const p = JSON.parse(body)
+      let p = JSON.parse(body)
+      // SafePay webhook v2.0.0 wraps the entire event under a "root" key.
+      if (p && typeof p === "object" && p.root && typeof p.root === "object") {
+        p = p.root
+      }
       if (p.resource?.purchase_units) {
         gateway = "PayPal"
         orderId = orderId || p.resource.purchase_units[0]?.custom_id || ""
@@ -67,13 +73,19 @@ async function markInvoicePaid(req: Request, body: string) {
         } else if (typeof rawAmt === "string") {
           amount = parseFloat(rawAmt) / 100
         }
+        if (!tracker) {
+          tracker = inner?.tracker || p?.tracker || ""
+        }
       }
-    } catch (e) {
-      // ignore
+    } catch (e: any) {
+      console.log(`[Callback] JSON parse error: ${e?.message}`)
     }
   }
 
+  console.log(`[Callback] Parsed orderId=${orderId} amount=${amount} tracker=${tracker} gateway=${gateway}`)
+
   if (!orderId) {
+    console.log(`[Callback] ERROR no orderId`)
     return { error: "order_id not found" }
   }
 
@@ -83,38 +95,62 @@ async function markInvoicePaid(req: Request, body: string) {
     .eq("id", orderId)
     .maybeSingle()
 
-  if (invErr) return { error: invErr.message }
-  if (!invoice) return { error: `Invoice ${orderId} not found` }
+  if (invErr) {
+    console.log(`[Callback] ERROR invoice query: ${invErr.message}`)
+    return { error: invErr.message }
+  }
+  if (!invoice) {
+    console.log(`[Callback] ERROR invoice ${orderId} not found`)
+    return { error: `Invoice ${orderId} not found` }
+  }
 
-  const { data: txn } = await supabase
+  // --- Idempotency #1: skip if payment_transactions already completed for this tracker ---
+  const dedupeKey = tracker || orderId
+  const { data: existingTxn } = await supabase
     .from("payment_transactions")
-    .select("amount")
+    .select("id, status")
     .eq("invoice_id", orderId)
-    .eq("status", "pending")
-    .order("created_at", { ascending: false })
-    .limit(1)
+    .eq("gateway_transaction_id", dedupeKey)
+    .eq("status", "completed")
     .maybeSingle()
 
-  // Idempotency: skip if already completed for this invoice.
-  const { data: alreadyPaid } = await supabase
-    .from("payment_transactions")
+  if (existingTxn) {
+    console.log(`[Callback] SKIP already completed dedupeKey=${dedupeKey}`)
+    return { success: true, duplicate: true, invoice_id: orderId }
+  }
+
+  // --- Idempotency #2: skip if invoice_payments has a very recent row (SafePay fires twice) ---
+  const { data: existingPayment } = await supabase
+    .from("invoice_payments")
     .select("id")
     .eq("invoice_id", orderId)
-    .eq("status", "completed")
-    .not("gateway_transaction_id", "is", null)
+    .gte("created_at", new Date(Date.now() - 60_000).toISOString())
     .limit(1)
     .maybeSingle()
 
-  if (alreadyPaid) {
+  if (existingPayment) {
+    console.log(`[Callback] SKIP recent invoice_payments row exists for ${orderId}`)
+    await supabase
+      .from("invoices")
+      .update({ status: "Paid", amount_paid: invoice.total_amount })
+      .eq("id", orderId)
     return { success: true, duplicate: true, invoice_id: orderId }
   }
 
   let finalAmount = amount
-  if (finalAmount === null && txn) {
-    finalAmount = Number(txn.amount || 0)
-  } else if (finalAmount === null) {
-    finalAmount = 0
+  if (finalAmount === null || finalAmount === 0) {
+    const { data: txn } = await supabase
+      .from("payment_transactions")
+      .select("amount")
+      .eq("invoice_id", orderId)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    finalAmount = txn ? Number(txn.amount || 0) : Number(invoice.total_amount || 0)
   }
+
+  console.log(`[Callback] Inserting payment amount=${finalAmount}`)
 
   const { data: payment, error: payErr } = await supabase.from("invoice_payments").insert({
     invoice_id: orderId,
@@ -128,10 +164,25 @@ async function markInvoicePaid(req: Request, body: string) {
 
   if (payErr) {
     if (payErr.code === "23505") {
+      console.log(`[Callback] duplicate payment insert, treating as success`)
       return { success: true, duplicate: true, invoice_id: orderId }
     }
+    console.log(`[Callback] ERROR payment insert code=${payErr.code} msg=${payErr.message}`)
     return { error: payErr.message }
   }
+
+  // Update payment_transactions (best-effort)
+  if (tracker) {
+    await supabase
+      .from("payment_transactions")
+      .update({ status: "completed", payment_id: payment.id })
+      .eq("gateway_transaction_id", tracker)
+  }
+  await supabase
+    .from("payment_transactions")
+    .update({ status: "completed" })
+    .eq("invoice_id", orderId)
+    .eq("status", "pending")
 
   const { data: allPayments } = await supabase
     .from("invoice_payments")
@@ -139,29 +190,67 @@ async function markInvoicePaid(req: Request, body: string) {
     .eq("invoice_id", orderId)
 
   const totalPaid = allPayments?.reduce((sum, p) => sum + Number(p.amount || 0), 0) || 0
-  const newStatus = totalPaid >= Number(invoice.total_amount || 0) ? "Paid" : "Unpaid"
+  const newStatus = totalPaid >= Number(invoice.total_amount || 0) ? "Paid" : (totalPaid > 0 ? "Partial" : "Unpaid")
 
   const { error: updErr } = await supabase
     .from("invoices")
     .update({ status: newStatus, amount_paid: totalPaid })
     .eq("id", orderId)
-  if (updErr) return { error: updErr.message }
+  if (updErr) {
+    console.log(`[Callback] ERROR invoice update: ${updErr.message}`)
+    return { error: updErr.message }
+  }
 
-  await supabase
-    .from("payment_transactions")
-    .update({ status: "completed" })
-    .eq("invoice_id", orderId)
-    .eq("status", "pending")
+  // Send receipt email if invoice just became Paid (best-effort, do not fail webhook on email error)
+  if (newStatus === "Paid") {
+    try {
+      // Only send email if the invoice was NOT already Paid before this payment,
+      // to avoid spamming duplicate receipts when SafePay fires twice (GET + POST).
+      if (invoice.status !== "Paid") {
+        const { data: invoiceWithCompany } = await supabase
+          .from("invoices")
+          .select("company_id")
+          .eq("id", orderId)
+          .maybeSingle()
+        if (invoiceWithCompany?.company_id) {
+          console.log(`[Callback] sending receipt email for invoice=${orderId} company=${invoiceWithCompany.company_id}`)
+          const emailResult = await sendReceiptEmail(invoiceWithCompany.company_id, orderId)
+          console.log(`[Callback] receipt email result:`, emailResult)
+        } else {
+          console.log(`[Callback] no company_id on invoice ${orderId}, skipping email`)
+        }
+      } else {
+        console.log(`[Callback] invoice ${orderId} was already Paid, skipping duplicate receipt email`)
+      }
+    } catch (emailErr: any) {
+      console.log(`[Callback] receipt email failed (non-fatal): ${emailErr?.message}`)
+    }
+  }
 
+  console.log(`[Callback] SUCCESS invoice=${orderId} amount=${finalAmount} status=${newStatus} elapsed=${Date.now() - startTime}ms`)
   return { success: true, invoice_id: orderId, amount: finalAmount, totalPaid, status: newStatus }
 }
 
 export async function POST(req: Request) {
-  const body = await req.text()
-  const result = await markInvoicePaid(req, body)
-  if (result.error) {
-    return NextResponse.json(result, { status: 400 })
+  let body = ""
+  try {
+    body = await req.text()
+  } catch (e: any) {
+    console.log(`[Callback] POST body read error: ${e?.message}`)
   }
+  console.log(`[Callback] POST received body length=${body.length}`)
+  let result
+  try {
+    result = await markInvoicePaid(req, body)
+  } catch (e: any) {
+    console.log(`[Callback] POST crash: ${e?.message}\n${e?.stack}`)
+    return NextResponse.json({ error: e?.message || "Internal error", received: true }, { status: 200 })
+  }
+  if (result.error) {
+    console.log(`[Callback] POST error: ${result.error}`)
+    return NextResponse.json({ ...result, received: true }, { status: 200 })
+  }
+  console.log(`[Callback] POST returning 200 success`)
   return NextResponse.json(result)
 }
 
