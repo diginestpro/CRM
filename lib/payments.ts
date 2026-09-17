@@ -234,7 +234,7 @@ export async function createPaymentSession(invoiceId: string, gateway: "stripe" 
 }
 
 export async function handlePaymentWebhook(gateway: string, payload: any, signature: string, requestUrl?: string) {
-  // Reset the per-invocation tracker holder so we never leak state
+  // Unified logic calling processPaymentSuccess
   // between sequential webhook calls on the same module instance.
   safePayTrackerToken = ""
 
@@ -483,3 +483,72 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
 
   return { success: true }
 }
+export async function processPaymentSuccess(supabase: any, invoiceId: string, amount: number, gateway: string, dedupeKey: string, payload: any) {
+  // Idempotency: SafePay may fire the webhook (browser GET + server POST) twice.
+  // Prefer the SafePay tracker token (if available) as the dedupe key,
+  // otherwise fall back to the invoiceId.
+  const { data: existingTxn } = await supabase
+    .from("payment_transactions")
+    .select("id, status")
+    .eq("invoice_id", invoiceId)
+    .eq("gateway_transaction_id", dedupeKey)
+    .eq("status", "completed")
+    .maybeSingle()
+
+  const { data: invoice } = await supabase.from("invoices").select("total_amount, currency_code, status, company_id").eq("id", invoiceId).maybeSingle()
+
+  if (existingTxn) {
+    console.log("[PaymentProcessor] already processed (dedupeKey=", dedupeKey, "), skipping invoice", invoiceId)
+    return { success: true, duplicate: true, invoice_id: invoiceId }
+  }
+
+  const { data: payment, error: pErr } = await supabase
+    .from("invoice_payments")
+    .insert({
+      invoice_id: invoiceId,
+      amount: amount,
+      payment_date: new Date().toISOString().split("T")[0],
+      payment_method: gateway === "stripe" ? "Credit Card" : gateway,
+      status: "Completed",
+    })
+    .select()
+    .single()
+
+  if (pErr) throw pErr
+
+  const { error: txnErr } = await supabase.from("payment_transactions").insert({
+    invoice_id: invoiceId,
+    payment_id: payment.id,
+    gateway_transaction_id: dedupeKey,
+    amount: amount,
+    currency_code: invoice?.currency_code || "USD",
+    status: "completed",
+    raw_response: payload,
+  })
+  if (txnErr && txnErr.code !== "23505") throw txnErr
+
+  const { data: allPayments } = await supabase
+    .from("invoice_payments")
+    .select("amount")
+    .eq("invoice_id", invoiceId)
+
+  const totalPaid = allPayments?.reduce((sum, p) => sum + p.amount, 0) || 0
+  const newStatus = totalPaid >= (invoice?.total_amount || 0) ? "Paid" : (totalPaid > 0 ? "Partial" : "Unpaid")
+  const statusChangedToPaid = newStatus === "Paid" && invoice?.status !== "Paid"
+  await supabase.from("invoices").update({ status: newStatus, amount_paid: totalPaid }).eq("id", invoiceId)
+
+  if (invoiceId && (statusChangedToPaid || (invoice?.status === "Paid" && amount > 0))) {
+    try {
+      const companyId = invoice?.company_id
+      if (companyId) {
+        await sendReceiptEmail(companyId, invoiceId)
+      }
+    } catch (e: any) {
+      console.error("[PaymentProcessor] receipt email failed:", e?.message || e)
+    }
+  }
+
+  return { success: true }
+}
+
+
