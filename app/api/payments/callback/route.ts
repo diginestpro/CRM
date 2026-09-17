@@ -211,18 +211,19 @@ export async function POST(req: Request) {
   } catch (e: any) {
     console.log(`[Callback] POST body read error: ${e?.message}`)
   }
+  console.log(`[Callback] POST received body length=${body.length}`)
   let result
   try {
     result = await markInvoicePaid(req, body)
   } catch (e: any) {
     console.log(`[Callback] POST crash: ${e?.message}\n${e?.stack}`)
-    return NextResponse.json({ error: e?.message || "Internal error" }, { status: 500 })
+    return NextResponse.json({ error: e?.message || "Internal error", received: true }, { status: 200 })
   }
   if (result.error) {
-    console.log(`[Callback] POST returning 400: ${result.error}`)
-    return NextResponse.json(result, { status: 400 })
+    console.log(`[Callback] POST error: ${result.error}`)
+    return NextResponse.json({ ...result, received: true }, { status: 200 })
   }
-  console.log(`[Callback] POST returning 200`)
+  console.log(`[Callback] POST returning 200 success`)
   return NextResponse.json(result)
 }
 
