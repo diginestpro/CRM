@@ -116,6 +116,11 @@ async function markInvoicePaid(req: Request, body: string) {
 
   if (existingTxn) {
     console.log(`[Callback] SKIP already completed dedupeKey=${dedupeKey}`)
+    // Still ensure the invoice is marked Paid (it may have been missed on the first call)
+    await supabase
+      .from("invoices")
+      .update({ status: "Paid", amount_paid: invoice.total_amount })
+      .eq("id", orderId)
     return { success: true, duplicate: true, invoice_id: orderId }
   }
 
@@ -204,9 +209,20 @@ async function markInvoicePaid(req: Request, body: string) {
   // Send receipt email if invoice just became Paid (best-effort, do not fail webhook on email error)
   if (newStatus === "Paid") {
     try {
-      // Only send email if the invoice was NOT already Paid before this payment,
-      // to avoid spamming duplicate receipts when SafePay fires twice (GET + POST).
-      if (invoice.status !== "Paid") {
+      // Send email if the invoice was NOT already Paid before this payment.
+      // This prevents duplicates when SafePay fires twice (GET + POST).
+      // We use a marker: check if there's an existing completed transaction for this tracker.
+      const { data: txnExists } = await supabase
+        .from("payment_transactions")
+        .select("id")
+        .eq("invoice_id", orderId)
+        .eq("gateway_transaction_id", tracker || orderId)
+        .eq("status", "completed")
+        .maybeSingle()
+
+      // Send email only if this is the FIRST completed transaction for this tracker,
+      // AND the invoice was Unpaid before this payment
+      if (!txnExists && invoice.status !== "Paid") {
         const { data: invoiceWithCompany } = await supabase
           .from("invoices")
           .select("company_id")
@@ -220,7 +236,11 @@ async function markInvoicePaid(req: Request, body: string) {
           console.log(`[Callback] no company_id on invoice ${orderId}, skipping email`)
         }
       } else {
-        console.log(`[Callback] invoice ${orderId} was already Paid, skipping duplicate receipt email`)
+        if (txnExists) {
+          console.log(`[Callback] transaction ${tracker || orderId} already completed, skipping duplicate email`)
+        } else {
+          console.log(`[Callback] invoice ${orderId} was already Paid, skipping duplicate receipt email`)
+        }
       }
     } catch (emailErr: any) {
       console.log(`[Callback] receipt email failed (non-fatal): ${emailErr?.message}`)
