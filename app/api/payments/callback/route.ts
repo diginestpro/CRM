@@ -215,36 +215,40 @@ async function markInvoicePaid(req: Request, body: string) {
     return { error: updErr.message }
   }
 
-  // Send receipt email if invoice just became Paid (best-effort, do not fail webhook on email error)
-  if (newStatus === "Paid") {
-    try {
-      // `invoice` was read BEFORE any mutation in this request, so its status is the
-      // pre-payment state. If it wasn't Paid then, this call is the one that flipped it.
-      // Do NOT re-query payment_transactions here — this function already marked that
-      // row "completed" above, so any such check would always match and suppress the email.
-      if (invoice.status !== "Paid") {
-        const { data: invoiceWithCompany } = await supabase
-          .from("invoices")
-          .select("company_id")
-          .eq("id", orderId)
-          .maybeSingle()
-        if (invoiceWithCompany?.company_id) {
-          console.log(`[Callback] sending receipt email for invoice=${orderId} company=${invoiceWithCompany.company_id}`)
-          const emailResult = await sendReceiptEmail(invoiceWithCompany.company_id, orderId)
-          console.log(`[Callback] receipt email result:`, emailResult)
-        } else {
-          console.log(`[Callback] no company_id on invoice ${orderId}, skipping email`)
-        }
-      } else {
-        console.log(`[Callback] invoice ${orderId} was already Paid, skipping duplicate receipt email`)
-      }
-    } catch (emailErr: any) {
-      console.log(`[Callback] receipt email failed (non-fatal): ${emailErr?.message}`)
-    }
+  // Send receipt email asynchronously if invoice just became Paid.
+  // We do NOT await this so the webhook returns 200 to SafePay immediately
+  // instead of waiting for SMTP (which can take 1-5 seconds).
+  if (newStatus === "Paid" && invoice.status !== "Paid") {
+    // Fire-and-forget: log result but don't block the response
+    sendReceiptEmailAsync(orderId, supabase).catch((err) => {
+      console.log(`[Callback] async receipt email crashed for ${orderId}: ${err?.message}`)
+    })
   }
 
   console.log(`[Callback] SUCCESS invoice=${orderId} amount=${finalAmount} status=${newStatus} elapsed=${Date.now() - startTime}ms`)
   return { success: true, invoice_id: orderId, amount: finalAmount, totalPaid, status: newStatus }
+}
+
+// Async receipt email sender - does not block the webhook response.
+// SafePay's webhook timeout is short (~5s), and SMTP can take that long,
+// so we fire the email in the background and return 200 immediately.
+async function sendReceiptEmailAsync(orderId: string, supabase: any): Promise<void> {
+  try {
+    const { data: invoiceWithCompany } = await supabase
+      .from("invoices")
+      .select("company_id")
+      .eq("id", orderId)
+      .maybeSingle()
+    if (invoiceWithCompany?.company_id) {
+      console.log(`[Callback] [async] sending receipt email for invoice=${orderId} company=${invoiceWithCompany.company_id}`)
+      const emailResult = await sendReceiptEmail(invoiceWithCompany.company_id, orderId)
+      console.log(`[Callback] [async] receipt email result:`, emailResult)
+    } else {
+      console.log(`[Callback] [async] no company_id on invoice ${orderId}, skipping email`)
+    }
+  } catch (emailErr: any) {
+    console.log(`[Callback] [async] receipt email failed (non-fatal): ${emailErr?.message}`)
+  }
 }
 
 export async function POST(req: Request) {
