@@ -453,7 +453,7 @@ export async function handlePaymentWebhook(gateway: string, payload: any, signat
     .select("amount")
     .eq("invoice_id", invoiceId)
 
-  const totalPaid = allPayments?.reduce((sum, p) => sum + p.amount, 0) || 0
+  const totalPaid = allPayments?.reduce((sum: number, p: { amount: number }) => sum + p.amount, 0) || 0
 
   const newStatus = totalPaid >= (invoice?.total_amount || 0) ? "Paid" : (totalPaid > 0 ? "Partial" : "Unpaid")
   const statusChangedToPaid = newStatus === "Paid" && invoice?.status !== "Paid"
@@ -532,7 +532,7 @@ export async function processPaymentSuccess(supabase: any, invoiceId: string, am
     .select("amount")
     .eq("invoice_id", invoiceId)
 
-  const totalPaid = allPayments?.reduce((sum, p) => sum + p.amount, 0) || 0
+  const totalPaid = allPayments?.reduce((sum: number, p: { amount: number }) => sum + p.amount, 0) || 0
   const newStatus = totalPaid >= (invoice?.total_amount || 0) ? "Paid" : (totalPaid > 0 ? "Partial" : "Unpaid")
   const statusChangedToPaid = newStatus === "Paid" && invoice?.status !== "Paid"
   await supabase.from("invoices").update({ status: newStatus, amount_paid: totalPaid }).eq("id", invoiceId)

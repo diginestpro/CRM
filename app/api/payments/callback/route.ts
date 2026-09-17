@@ -98,12 +98,12 @@ export async function POST(req: Request) {
   try {
     result = await markInvoicePaid(req, body)
   } catch (e: any) {
-    console.log("[Callback] POST crash: " + (e?.message || "unknown") + "\\\\n" + (e?.stack || ""))
+    console.log("[Callback] POST crash: " + (e?.message || "unknown") + "\n" + (e?.stack || ""))
     return NextResponse.json({ error: e?.message || "Internal error" }, { status: 500 })
   }
-  if (result.error) {
-    console.log("[Callback] POST error: " + result.error)
-    if (result.duplicate) {
+  if ((result as any).error) {
+    console.log("[Callback] POST error: " + (result as any).error)
+    if ((result as any).duplicate) {
       console.log("[Callback] POST duplicate detected, returning 200")
       return NextResponse.json(result, { status: 200 })
     }
@@ -143,12 +143,12 @@ export async function GET(req: Request) {
   const p = isPaid ? "Returning to your invoice..." : "We are confirming your payment with SafePay. Please wait a moment."
   const btn = isPaid ? "View Invoice" : "Check Status"
 
-  const html = \`<!doctype html>
-<html>
+  const html = `<!doctype html>
+<html >
 <head>
   <meta charset="utf-8">
-  <title>\${title}</title>
-  <meta http-equiv="refresh" content="0;url=\${fullUrl}">
+  <title>${title}</title>
+  <meta http-equiv="refresh" content="0;url=${fullUrl}">
   <style>
     body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f8fafc;color:#0f172a}
     .c{text-align:center;padding:32px;background:white;border-radius:16px;box-shadow:0 10px 25px rgba(15,23,42,.08);max-width:440px}
@@ -158,12 +158,12 @@ export async function GET(req: Request) {
 </head>
 <body>
   <div class="c">
-    <h1>\${h1}</h1>
-    <p>\${p}</p>
-    <a class="btn" href="\${fullUrl}">\${btn}</a>
+    <h1>${h1}</h1>
+    <p>${p}</p>
+    <a class="btn" href="${fullUrl}">${btn}</a>
   </div>
 </body>
-</html>\`;
+</html>`;
 
   return new NextResponse(html, {
     status: 200,

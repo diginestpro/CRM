@@ -1,1 +1,89 @@
-import { NextResponse } from "next/server"\nimport { createClient } from "@supabase/supabase-js"\nimport { processPaymentSuccess } from "@/lib/payments"\n\nconst SYNC_SECRET = process.env.PAYMENT_SYNC_SECRET\n\nfunction getServiceClient() {\n  return createClient(\n    process.env.NEXT_PUBLIC_SUPABASE_URL!,\n    process.env.SUPABASE_SERVICE_ROLE_KEY!,\n    { auth: { persistSession: false } }\n  )\n}\n\nexport async function GET(req: Request) {\n  // Security: Only allow requests with the correct secret token\n  const { searchParams } = new URL(req.url)\n  const secret = searchParams.get("secret")\n\n  if (!SYNC_SECRET || secret !== SYNC_SECRET) {\n    return NextResponse.json({ error: "Unauthorized" }, { status: 401})\n  }\n\n  const supabase = getServiceClient()\n  console.log("[PaymentSync] Starting reconciliation process...")\n\n  try {\n    // 1. Find all invoices that are NOT "Paid"\n    const { data: pendingInvoices, error: invErr } = await supabase\n      .from("invoices")\n      .select("id, total_amount, currency_code, status")\n      .neq("status", "Paid")\n\n    if (invErr) throw invErr\n\n    if (!pendingInvoices || pendingInvoices.length === 0) {\n      console.log("[PaymentSync] No pending invoices to sync.")\n      return NextResponse.json({ message: "No pending invoices found." })\n    }\n\n    console.log("[PaymentSync] Checking status for " + pendingInvoices.length + " invoices.")\n\n    let processedCount = 0\n    let errorCount = 0\n\n    for (const invoice of pendingInvoices) {\n      try {\n        // 2. Check if there's a transaction record for this invoice\n        const { data: txn } = await supabase\n          .from("payment_transactions")\n          .select("*")\n          .eq("invoice_id", invoice.id)\n          .maybeSingle()\n\n        if (!txn) continue // No attempt to pay yet\n\n        // 3. Query the Payment Gateway for the actual status\n        // NOTE: In a real production environment, you would call the SafePay/PayPal/Stripe API here\n        // using the txn.gateway_transaction_id.\n        // For now, we provide the framework. \n        \n        // const actualStatus = await checkGatewayStatus(txn.gateway_transaction_id, txn.gateway)\n        // if (actualStatus === "completed") {\n        //   await processPaymentSuccess(supabase, invoice.id, txn.amount, txn.gateway, txn.gateway_transaction_id, { sync: true })\n        //   processedCount++\n        // }\n\n        // Placeholder: Since we don't have the Gateway's status-check API keys/methods implemented\n        // we log that we would check here.\n        console.log("[PaymentSync] Would verify status for invoice " + invoice.id + " with txn " + txn.gateway_transaction_id)\n\n      } catch (e: any) {\n        console.error("[PaymentSync] Error processing invoice " + invoice.id + ": " + e?.message)\n        errorCount++\n      }\n    }\n\n    return NextResponse.json({\n      message: "Sync completed",\n      checked: pendingInvoices.length,\n      processed: processedCount,\n      errors: errorCount\n    })\n\n  } catch (e: any) {\n    console.error("[PaymentSync] Fatal error: " + e?.message)\n    return NextResponse.json({ error: e?.message }, { status: 500})\n  }\n}
+import { NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
+import { processPaymentSuccess } from "@/lib/payments"
+
+const SYNC_SECRET = process.env.PAYMENT_SYNC_SECRET
+
+function getServiceClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  )
+}
+
+export async function GET(req: Request) {
+  // Security: Only allow requests with the correct secret token
+  const { searchParams } = new URL(req.url)
+  const secret = searchParams.get("secret")
+
+  if (!SYNC_SECRET || secret !== SYNC_SECRET) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401})
+  }
+
+  const supabase = getServiceClient()
+  console.log("[PaymentSync] Starting reconciliation process...")
+
+  try {
+    // 1. Find all invoices that are NOT "Paid"
+    const { data: pendingInvoices, error: invErr } = await supabase
+      .from("invoices")
+      .select("id, total_amount, currency_code, status")
+      .neq("status", "Paid")
+
+    if (invErr) throw invErr
+
+    if (!pendingInvoices || pendingInvoices.length === 0) {
+      console.log("[PaymentSync] No pending invoices to sync.")
+      return NextResponse.json({ message: "No pending invoices found." })
+    }
+
+    console.log("[PaymentSync] Checking status for " + pendingInvoices.length + " invoices.")
+
+    let processedCount = 0
+    let errorCount = 0
+
+    for (const invoice of pendingInvoices) {
+      try {
+        // 2. Check if there's a transaction record for this invoice
+        const { data: txn } = await supabase
+          .from("payment_transactions")
+          .select("*")
+          .eq("invoice_id", invoice.id)
+          .maybeSingle()
+
+        if (!txn) continue // No attempt to pay yet
+
+        // 3. Query the Payment Gateway for the actual status
+        // NOTE: In a real production environment, you would call the SafePay/PayPal/Stripe API here
+        // using the txn.gateway_transaction_id.
+        // For now, we provide the framework. 
+        
+        // const actualStatus = await checkGatewayStatus(txn.gateway_transaction_id, txn.gateway)
+        // if (actualStatus === "completed") {
+        //   await processPaymentSuccess(supabase, invoice.id, txn.amount, txn.gateway, txn.gateway_transaction_id, { sync: true })
+        //   processedCount++
+        // }
+
+        // Placeholder: Since we don't have the Gateway's status-check API keys/methods implemented
+        // we log that we would check here.
+        console.log("[PaymentSync] Would verify status for invoice " + invoice.id + " with txn " + txn.gateway_transaction_id)
+
+      } catch (e: any) {
+        console.error("[PaymentSync] Error processing invoice " + invoice.id + ": " + e?.message)
+        errorCount++
+      }
+    }
+
+    return NextResponse.json({
+      message: "Sync completed",
+      checked: pendingInvoices.length,
+      processed: processedCount,
+      errors: errorCount
+    })
+
+  } catch (e: any) {
+    console.error("[PaymentSync] Fatal error: " + e?.message)
+    return NextResponse.json({ error: e?.message }, { status: 500})
+  }
+}
