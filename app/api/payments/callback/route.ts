@@ -89,6 +89,15 @@ async function markInvoicePaid(req: Request, body: string) {
     return { error: "order_id not found" }
   }
 
+  // Validate UUID format before querying Supabase. If not a valid UUID (e.g.
+  // SafePay test payloads use fake IDs like "AX-09u812312"), acknowledge as
+  // received so SafePay doesn't retry forever, but log it for debugging.
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (!uuidRegex.test(orderId)) {
+    console.log(`[Callback] WARNING orderId is not a valid UUID: ${orderId} (likely a test payload). Acknowledging as received.`)
+    return { success: true, skipped: "test_payload_invalid_uuid", order_id: orderId }
+  }
+
   const { data: invoice, error: invErr } = await supabase
     .from("invoices")
     .select("id, total_amount, amount_paid, status, allows_partial_payments, min_payment")
