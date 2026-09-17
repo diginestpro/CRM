@@ -218,20 +218,11 @@ async function markInvoicePaid(req: Request, body: string) {
   // Send receipt email if invoice just became Paid (best-effort, do not fail webhook on email error)
   if (newStatus === "Paid") {
     try {
-      // Send email if the invoice was NOT already Paid before this payment.
-      // This prevents duplicates when SafePay fires twice (GET + POST).
-      // We use a marker: check if there's an existing completed transaction for this tracker.
-      const { data: txnExists } = await supabase
-        .from("payment_transactions")
-        .select("id")
-        .eq("invoice_id", orderId)
-        .eq("gateway_transaction_id", tracker || orderId)
-        .eq("status", "completed")
-        .maybeSingle()
-
-      // Send email only if this is the FIRST completed transaction for this tracker,
-      // AND the invoice was Unpaid before this payment
-      if (!txnExists && invoice.status !== "Paid") {
+      // `invoice` was read BEFORE any mutation in this request, so its status is the
+      // pre-payment state. If it wasn't Paid then, this call is the one that flipped it.
+      // Do NOT re-query payment_transactions here — this function already marked that
+      // row "completed" above, so any such check would always match and suppress the email.
+      if (invoice.status !== "Paid") {
         const { data: invoiceWithCompany } = await supabase
           .from("invoices")
           .select("company_id")
@@ -245,11 +236,7 @@ async function markInvoicePaid(req: Request, body: string) {
           console.log(`[Callback] no company_id on invoice ${orderId}, skipping email`)
         }
       } else {
-        if (txnExists) {
-          console.log(`[Callback] transaction ${tracker || orderId} already completed, skipping duplicate email`)
-        } else {
-          console.log(`[Callback] invoice ${orderId} was already Paid, skipping duplicate receipt email`)
-        }
+        console.log(`[Callback] invoice ${orderId} was already Paid, skipping duplicate receipt email`)
       }
     } catch (emailErr: any) {
       console.log(`[Callback] receipt email failed (non-fatal): ${emailErr?.message}`)
@@ -297,32 +284,6 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
   const orderId = url.searchParams.get("order_id") || ""
   const tracker = url.searchParams.get("tracker") || ""
-
-  // If invoice was successfully marked Paid (not duplicate, not error), send receipt email.
-  // The POST webhook will skip email if it sees the txn already completed, preventing dupes.
-  if (!result.error && !result.duplicate && orderId) {
-    try {
-      const { createClient } = await import("@supabase/supabase-js")
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        { auth: { persistSession: false } }
-      )
-      const { data: invoiceWithCompany } = await supabase
-        .from("invoices")
-        .select("company_id, status")
-        .eq("id", orderId)
-        .maybeSingle()
-      if (invoiceWithCompany?.company_id && invoiceWithCompany.status === "Paid") {
-        console.log(`[Callback][GET] sending receipt email for invoice=${orderId}`)
-        const { sendReceiptEmail } = await import("@/lib/email")
-        const emailResult = await sendReceiptEmail(invoiceWithCompany.company_id, orderId)
-        console.log(`[Callback][GET] receipt email result:`, emailResult)
-      }
-    } catch (emailErr: any) {
-      console.log(`[Callback][GET] receipt email failed (non-fatal): ${emailErr?.message}`)
-    }
-  }
 
   const success = !result.error
   const params = new URLSearchParams()
