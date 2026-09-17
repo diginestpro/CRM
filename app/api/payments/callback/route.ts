@@ -289,6 +289,32 @@ export async function GET(req: Request) {
   const orderId = url.searchParams.get("order_id") || ""
   const tracker = url.searchParams.get("tracker") || ""
 
+  // If invoice was successfully marked Paid (not duplicate, not error), send receipt email.
+  // The POST webhook will skip email if it sees the txn already completed, preventing dupes.
+  if (!result.error && !result.duplicate && orderId) {
+    try {
+      const { createClient } = await import("@supabase/supabase-js")
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { persistSession: false } }
+      )
+      const { data: invoiceWithCompany } = await supabase
+        .from("invoices")
+        .select("company_id, status")
+        .eq("id", orderId)
+        .maybeSingle()
+      if (invoiceWithCompany?.company_id && invoiceWithCompany.status === "Paid") {
+        console.log(`[Callback][GET] sending receipt email for invoice=${orderId}`)
+        const { sendReceiptEmail } = await import("@/lib/email")
+        const emailResult = await sendReceiptEmail(invoiceWithCompany.company_id, orderId)
+        console.log(`[Callback][GET] receipt email result:`, emailResult)
+      }
+    } catch (emailErr: any) {
+      console.log(`[Callback][GET] receipt email failed (non-fatal): ${emailErr?.message}`)
+    }
+  }
+
   const success = !result.error
   const params = new URLSearchParams()
   if (success) {
